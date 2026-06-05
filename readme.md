@@ -126,22 +126,6 @@ PostgreSQL. Таблицы создаются автоматически при 
 
 ---
 
-## .gitignore (минимум)
-
-```
-venv/
-.env
-__pycache__/
-*.pyc
-snapshots/
-feedframes/
-*.pt
-*.pth
-*.pkl
-```
-
----
-
 ## Стек
 
 - **Python 3.11+**

@@ -1,0 +1,19 @@
+# Виртуальное окружение
+.venv/
+venv/
+
+# Кэш Python
+__pycache__/
+*.pyc
+
+# Секреты и конфиг
+.env
+
+# Автоматически генерируемые данные
+snapshots/
+feed_frames/
+video/
+
+# Файлы IDE
+.idea/
+.vscode/

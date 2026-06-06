@@ -207,7 +207,9 @@ class BCSSession(Base):
     id_cow             = Column(UUID(as_uuid=True), ForeignKey("cows.id_cow"), nullable=True)
     id_stream          = Column(BigInteger, ForeignKey("video_streams.id_stream"), nullable=True)
     start_time         = Column(DateTime, nullable=False, default=datetime.utcnow)
-    image_path         = Column(String(500), nullable=False)
+    image_path         = Column(String(500), nullable=False, default="")
+    video_path         = Column(String(500), nullable=True)
+    source_type        = Column(String(20), nullable=False, default="image")
     num_cows_detected  = Column(Integer, nullable=False)
 
     cow          = relationship("Cow", back_populates="bcs_sessions")
@@ -218,13 +220,16 @@ class BCSSession(Base):
 class BCSMeasurement(Base):
     __tablename__ = "bcs_measurements"
 
-    id          = Column(BigInteger, primary_key=True, autoincrement=True)
-    id_session  = Column(BigInteger, ForeignKey("bcs_sessions.id"), nullable=False)
-    id_cow      = Column(UUID(as_uuid=True), ForeignKey("cows.id_cow"), nullable=True)  # nullable=True — для теста без коровы
-    bcs_value   = Column(Float, nullable=False)
-    confidence  = Column(Float)
-    bbox_coords = Column(String)  # "x1,y1,x2,y2"
-    created_at  = Column(DateTime, nullable=False, default=datetime.utcnow)
+    id              = Column(BigInteger, primary_key=True, autoincrement=True)
+    id_session      = Column(BigInteger, ForeignKey("bcs_sessions.id"), nullable=False)
+    id_cow          = Column(UUID(as_uuid=True), ForeignKey("cows.id_cow"), nullable=True)
+    recognized_tag  = Column(String(20), nullable=True)
+    cow_number      = Column(Integer, nullable=True)
+    bcs_value       = Column(Float, nullable=False)
+    confidence      = Column(Float)
+    bbox_coords     = Column(String)
+    frame_number    = Column(Integer, nullable=True)
+    created_at      = Column(DateTime, nullable=False, default=datetime.utcnow)
 
     session = relationship("BCSSession", back_populates="measurements")
     cow     = relationship("Cow", back_populates="bcs_measurements")
@@ -239,6 +244,51 @@ class Event(Base):
     cow_tag   = Column(String(20))                   # e.g. "A-01"
     message   = Column(String, nullable=False)
 
+# ---------- Активность: кормление / питьё ----------
+
+class ActivitySession(Base):
+    __tablename__ = "sessions"
+
+    id                         = Column(Integer, primary_key=True, autoincrement=True)
+    cow_number                 = Column(Integer, ForeignKey("cows.cow_number"), nullable=False)
+    recognized_tag             = Column(String(20), nullable=True)
+    start_time                 = Column(String, nullable=False)
+    total_duration_feed_sec    = Column(Float, nullable=False, default=0.0)
+    total_duration_drink_sec   = Column(Float, nullable=False, default=0.0)
+    num_frames                 = Column(Integer, nullable=False, default=0)
+
+    frames = relationship(
+        "ActivityFrame", back_populates="session", cascade="all, delete-orphan"
+    )
+
+
+class ActivityFrame(Base):
+    __tablename__ = "frames"
+
+    id               = Column(Integer, primary_key=True, autoincrement=True)
+    session_id       = Column(Integer, ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False)
+    timestamp_sec    = Column(Float, nullable=False)
+    cow_detected     = Column(Boolean, nullable=False, default=False)
+    state            = Column(String(50))
+    camera_location  = Column(String(100))
+    image_path       = Column(String(500))
+    confidence       = Column(Float)
+    recognized_tag   = Column(String(20), nullable=True)
+
+    session = relationship("ActivitySession", back_populates="frames")
+
+
+class ActivityCowResult(Base):
+    __tablename__ = "activity_cow_results"
+
+    id             = Column(Integer, primary_key=True, autoincrement=True)
+    session_id     = Column(Integer, ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False)
+    recognized_tag = Column(String(20), nullable=False)
+    cow_number     = Column(Integer, ForeignKey("cows.cow_number"), nullable=True)
+    feed_sec       = Column(Float, nullable=False, default=0.0)
+    drink_sec      = Column(Float, nullable=False, default=0.0)
+
+
 # ---------- Сон (Рената) ----------
 
 class SleepSession(Base):
@@ -246,6 +296,7 @@ class SleepSession(Base):
 
     id                 = Column(Integer, primary_key=True, autoincrement=True)
     cow_number         = Column(Integer, ForeignKey("cows.cow_number"), nullable=False)
+    recognized_tag     = Column(String(20), nullable=True)
     start_time         = Column(String, nullable=False)
     night_start        = Column(String)
     night_end          = Column(String)
@@ -263,7 +314,19 @@ class SleepFrame(Base):
     session_id    = Column(Integer, ForeignKey("sleep_sessions.id", ondelete="CASCADE"), nullable=False)
     timestamp_sec = Column(Float, nullable=False)
     datetime_iso  = Column(String)
-    posture       = Column(String)
-    image_path    = Column(String)
+    posture         = Column(String)
+    image_path      = Column(String)
+    recognized_tag  = Column(String(20), nullable=True)
 
     session = relationship("SleepSession", back_populates="frames")
+
+
+class SleepCowResult(Base):
+    __tablename__ = "sleep_cow_results"
+
+    id             = Column(Integer, primary_key=True, autoincrement=True)
+    session_id     = Column(Integer, ForeignKey("sleep_sessions.id", ondelete="CASCADE"), nullable=False)
+    recognized_tag = Column(String(20), nullable=False)
+    cow_number     = Column(Integer, ForeignKey("cows.cow_number"), nullable=True)
+    lying_sec      = Column(Float, nullable=False, default=0.0)
+    standing_sec   = Column(Float, nullable=False, default=0.0)

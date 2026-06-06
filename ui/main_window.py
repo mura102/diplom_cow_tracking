@@ -72,6 +72,7 @@ class MainWindow(QMainWindow):
         self.active_camera_widgets: list = []
         self._kvs_running      = False
         self._active_algo      = None   # None | "activity" | "sleep"
+        self._is_video_mode    = False
 
         self._conn_params = {
             "host":     os.environ.get("DB_HOST",     "localhost"),
@@ -341,30 +342,52 @@ class MainWindow(QMainWindow):
                 self.update_log(f"⚠️ Ошибка загрузки камер: {e}")
         else:
             # Demo-режим: заглушка
-            self.combo_camera_activity.addItem("Камера 1 — кормушка", userData=None)
-            self.combo_camera_activity.addItem("Камера 2 — поилка",   userData=None)
+            self.combo_camera_activity.addItem("Камера 1 — кормовая зона", userData=None)
+            self.combo_camera_activity.addItem("Камера 2 — питьевая зона", userData=None)
 
         self.combo_camera_activity.blockSignals(False)
 
+    def _set_activity_source_ui(self, video_mode: bool):
+        """Переключает UI: камера из БД (живой поток) или зона для видео-теста."""
+        self._is_video_mode = video_mode
+        camera_widgets = (
+            getattr(self, "combo_camera_activity", None),
+            getattr(self, "btn_refresh_cameras", None),
+        )
+        for w in camera_widgets:
+            if w is not None:
+                w.setEnabled(not video_mode)
+        zone_row = getattr(self, "_video_zone_row_widgets", ())
+        for w in zone_row:
+            w.setVisible(video_mode)
+
+    def _get_video_test_zone(self) -> str:
+        combo = getattr(self, "combo_video_zone", None)
+        from external_activity.activity_zone import ZONE_FEED
+
+        if combo is None:
+            return ZONE_FEED
+        zone = combo.currentData()
+        return zone if zone else ZONE_FEED
+
     def _get_selected_camera_location(self) -> str:
         """
-        Возвращает location камеры, выбранной в combo_camera_activity.
-        Fallback: 'кормушка'.
+        Живой поток: location камеры из БД.
+        Видеофайл: зона из combo_video_zone (тестовый режим).
         """
+        if self._is_video_mode:
+            return self._get_video_test_zone()
+
+        from external_activity.activity_zone import ZONE_FEED, normalize_zone
+
         cam = self.combo_camera_activity.currentData()
         if cam is not None:
             loc = getattr(cam, "location", None)
             if loc:
-                return loc
+                return normalize_zone(loc)
 
-        # Demo-режим: берём из текста комбобокса
-        text = self.combo_camera_activity.currentText().lower()
-        if "поилка" in text or "drink" in text or "water" in text:
-            return "поилка"
-        if "кормушка" in text or "feed" in text or "eat" in text:
-            return "кормушка"
-
-        return "кормушка"
+        text = self.combo_camera_activity.currentText()
+        return normalize_zone(text)
 
     # ── Детекция активности (Рената) ─────────────────────────────────
 
@@ -373,8 +396,14 @@ class MainWindow(QMainWindow):
             self._block_other_algos(self.btn_detect_activity)
             self._active_algo = "activity"
             self.btn_detect_activity.setText("🏃 Детекция активности (СТОП)")
-            cam_info = self.combo_camera_activity.currentText()
-            self.update_log(f"Мониторинг активности запущен. Камера: {cam_info}")
+            if self._is_video_mode:
+                zone = self._get_video_test_zone()
+                self.update_log(
+                    f"Мониторинг активности (видео-тест). Зона: {zone}"
+                )
+            else:
+                cam_info = self.combo_camera_activity.currentText()
+                self.update_log(f"Мониторинг активности запущен. Камера: {cam_info}")
             self._start_activity_on_video_end()
         else:
             self._active_algo = None
@@ -385,27 +414,40 @@ class MainWindow(QMainWindow):
                 self._analysis_worker.terminate()
                 self._analysis_worker = None
 
+    def _pending_snapshots(self):
+        if not self.ai_worker or not self.ai_worker._saved_paths:
+            return None
+        return self.ai_worker._saved_paths, self.ai_worker._saved_timestamps
+
     def _start_activity_on_video_end(self):
-        if self.ai_worker:
-            try:
-                self.ai_worker.snapshots_ready.disconnect()
-            except Exception:
-                pass
-            self.ai_worker.snapshots_ready.connect(self._on_snapshots_ready_activity)
-            self.update_log("Анализ запустится автоматически после окончания видео.")
-        else:
+        if not self.ai_worker:
             self.update_log("⚠️ Сначала выберите видеофайл или камеру.")
+            return
+        try:
+            self.ai_worker.snapshots_ready.disconnect()
+        except Exception:
+            pass
+        self.ai_worker.snapshots_ready.connect(self._on_snapshots_ready_activity)
+        pending = self._pending_snapshots()
+        if pending and not self.ai_worker.isRunning():
+            self.update_log(
+                f"Видео уже обработано — анализ {len(pending[0])} снимков..."
+            )
+            self._on_snapshots_ready_activity(*pending)
+        else:
+            self.update_log("Анализ запустится автоматически после окончания видео.")
 
     def _on_snapshots_ready_activity(self, image_paths: list, timestamps: list):
         if self._active_algo != "activity":
             return
 
-        # Берём локацию камеры из выбранного элемента комбобокса
         cam_location = self._get_selected_camera_location()
         cow_number   = self._get_default_cow_number()
+        activity_zone = cam_location if self._is_video_mode else None
 
+        mode_label = "видео-тест" if self._is_video_mode else "камера"
         self.update_log(
-            f"Запуск AnalysisWorker: камера='{cam_location}', "
+            f"Запуск AnalysisWorker ({mode_label}): зона='{cam_location}', "
             f"снимков={len(image_paths)}, корова №{cow_number}"
         )
 
@@ -414,6 +456,7 @@ class MainWindow(QMainWindow):
             timestamps=timestamps,
             camera_location=cam_location,
             cow_number=cow_number,
+            activity_zone=activity_zone,
         )
         self._analysis_worker.progress.connect(self.update_log)
         self._analysis_worker.finished.connect(self._on_activity_analysis_done)
@@ -421,10 +464,22 @@ class MainWindow(QMainWindow):
         self._analysis_worker.start()
 
     def _on_activity_analysis_done(self, result: dict):
-        self.update_log(
-            f"✅ Анализ завершён: кормление {result['feed_min']} мин {result['feed_sec']} сек, "
-            f"питьё {result['drink_min']} мин {result['drink_sec']} сек"
-        )
+        cow_results = result.get("cow_results") or []
+        if cow_results:
+            summary = "; ".join(
+                f"ID {cr['recognized_tag']}: "
+                f"{cr.get('feed_min', cr['feed_sec'] // 60)}м "
+                f"{cr.get('feed_sec_rem', cr['feed_sec'] % 60)}с"
+                for cr in cow_results
+            )
+            self.update_log(f"✅ Анализ завершён: {summary}")
+        else:
+            id_label = result.get("recognized_tag") or result.get("cow_number", "—")
+            self.update_log(
+                f"✅ Анализ завершён: ID={id_label}, "
+                f"кормление {result['feed_min']} мин {result['feed_sec']} сек, "
+                f"питьё {result['drink_min']} мин {result['drink_sec']} сек"
+            )
         self._show_activity_result(result)
         self._unblock_all_algos()
         self.btn_detect_activity.setChecked(False)
@@ -443,18 +498,38 @@ class MainWindow(QMainWindow):
         from PyQt6.QtWidgets import QTextEdit
         dlg = QDialog(self)
         dlg.setWindowTitle("Результат: Детекция активности")
-        dlg.setMinimumSize(480, 280)
+        dlg.setMinimumSize(480, 320)
         lay = QVBoxLayout(dlg)
         lay.addWidget(QLabel("✅ Анализ активности завершён"))
         te = QTextEdit()
         te.setReadOnly(True)
-        te.setPlainText(
-            f"Корова №{result['cow_number']}\n"
-            f"Камера: {result['camera']}\n"
-            f"Кадров: {result['num_frames']}\n\n"
-            f"Время кормления : {result['feed_min']} мин ({result['feed_sec']} сек)\n"
-            f"Время у поилки  : {result['drink_min']} мин ({result['drink_sec']} сек)\n"
-        )
+        zone = result.get("activity_zone") or result.get("camera", "—")
+        lines = [
+            f"Зона: {zone}",
+            f"Кадров: {result['num_frames']}",
+            "",
+            "── Итог по каждой корове ──",
+        ]
+        cow_results = result.get("cow_results") or []
+        if cow_results:
+            for cr in cow_results:
+                fm = cr.get("feed_min", int(cr["feed_sec"]) // 60)
+                fs = cr.get("feed_sec_rem", int(cr["feed_sec"]) % 60)
+                dm = cr.get("drink_min", int(cr["drink_sec"]) // 60)
+                ds = cr.get("drink_sec_rem", int(cr["drink_sec"]) % 60)
+                lines.append(f"ID {cr['recognized_tag']} (корова №{cr['cow_number']}):")
+                lines.append(f"  Кормление: {fm} мин ({fs} сек)")
+                lines.append(f"  Питьё:     {dm} мин ({ds} сек)")
+                lines.append("")
+        else:
+            lines.extend([
+                f"ID: {result.get('recognized_tag') or result['cow_number']}",
+                f"Корова №{result['cow_number']}",
+                "",
+                f"Время кормления : {result['feed_min']} мин ({result['feed_sec']} сек)",
+                f"Время в питьевой зоне: {result['drink_min']} мин ({result['drink_sec']} сек)",
+            ])
+        te.setPlainText("\n".join(lines))
         lay.addWidget(te)
         btn = QPushButton("Закрыть")
         btn.clicked.connect(dlg.accept)
@@ -480,24 +555,66 @@ class MainWindow(QMainWindow):
                 self._sleep_worker = None
 
     def _start_sleep_on_video_end(self):
-        if self.ai_worker:
-            try:
-                self.ai_worker.snapshots_ready.disconnect()
-            except Exception:
-                pass
-            self.ai_worker.snapshots_ready.connect(self._on_snapshots_ready_sleep)
-            self.update_sleep_log("Анализ сна запустится после окончания видео.")
-        else:
+        if not self.ai_worker:
             self.update_sleep_log("⚠️ Сначала выберите видеофайл.")
+            return
+        try:
+            self.ai_worker.snapshots_ready.disconnect()
+        except Exception:
+            pass
+        self.ai_worker.snapshots_ready.connect(self._on_snapshots_ready_sleep)
+        pending = self._pending_snapshots()
+        if pending and not self.ai_worker.isRunning():
+            self.update_sleep_log(
+                f"Видео уже обработано — анализ сна ({len(pending[0])} снимков)..."
+            )
+            self._on_snapshots_ready_sleep(*pending)
+        else:
+            self.update_sleep_log("Анализ сна запустится после окончания видео.")
 
     def _on_snapshots_ready_sleep(self, image_paths: list, timestamps: list):
         if self._active_algo != "sleep":
             return
         try:
-            from external_sleep.sleep_analysis import process_sleep_sequence
+            import datetime as dt
+
+            from external_activity.db_config import get_default_cow_number
+            from external_activity.sleep_analysis import process_sleep_sequence
+
             self.update_sleep_log("Запуск ночной модели сна...")
-            result = process_sleep_sequence(image_paths=image_paths, timestamps=timestamps)
-            self.update_sleep_log("✅ Анализ сна завершён.")
+            lying_sec, standing_sec, recognized_tag, cow_results = process_sleep_sequence(
+                image_paths=image_paths,
+                timestamps=timestamps,
+                cow_number=get_default_cow_number(),
+                night_start=dt.time(22, 0),
+                night_end=dt.time(5, 0),
+                force_night=False,
+                show_frames=False,
+                save_frames=True,
+                interval_sec=2.0,
+            )
+            for cr in cow_results:
+                cr["lying_min"] = round(cr["lying_sec"] / 60, 2)
+                cr["standing_min"] = round(cr["standing_sec"] / 60, 2)
+            result = {
+                "lying_sec": lying_sec,
+                "standing_sec": standing_sec,
+                "lying_min": round(lying_sec / 60, 2),
+                "standing_min": round(standing_sec / 60, 2),
+                "recognized_tag": recognized_tag,
+                "cow_results": cow_results,
+            }
+            if cow_results:
+                summary = "; ".join(
+                    f"ID {cr['recognized_tag']}: "
+                    f"лёжа {cr['lying_sec']:.0f}с"
+                    for cr in cow_results
+                )
+                self.update_sleep_log(f"✅ Анализ сна завершён. {summary}")
+            else:
+                self.update_sleep_log(
+                    f"✅ Анализ сна завершён. ID={recognized_tag or '—'}"
+                )
             self._show_sleep_result(result)
         except Exception as e:
             import traceback
@@ -517,9 +634,37 @@ class MainWindow(QMainWindow):
         dlg.setMinimumSize(480, 280)
         lay = QVBoxLayout(dlg)
         lay.addWidget(QLabel("🌙 Анализ сна завершён"))
+        if isinstance(result, dict):
+            lines = [
+                "── Итог по каждой корове ──",
+            ]
+            cow_results = result.get("cow_results") or []
+            if cow_results:
+                for cr in cow_results:
+                    lines.append(f"ID {cr['recognized_tag']} (корова №{cr['cow_number']}):")
+                    lines.append(
+                        f"  Лёжа: {cr['lying_sec']:.1f} сек "
+                        f"({cr.get('lying_min', cr['lying_sec'] / 60):.2f} мин)"
+                    )
+                    lines.append(
+                        f"  Стоя: {cr['standing_sec']:.1f} сек "
+                        f"({cr.get('standing_min', cr['standing_sec'] / 60):.2f} мин)"
+                    )
+                    lines.append("")
+            else:
+                lines.extend([
+                    f"ID: {result.get('recognized_tag') or '—'}",
+                    f"Время лёжа: {result['lying_sec']:.1f} сек "
+                    f"({result['lying_min']} мин)",
+                    f"Время стоя: {result['standing_sec']:.1f} сек "
+                    f"({result['standing_min']} мин)",
+                ])
+            text = "\n".join(lines)
+        else:
+            text = str(result)
         te = QTextEdit()
         te.setReadOnly(True)
-        te.setPlainText(str(result))
+        te.setPlainText(text)
         lay.addWidget(te)
         btn = QPushButton("Закрыть")
         btn.clicked.connect(dlg.accept)
@@ -565,6 +710,7 @@ class MainWindow(QMainWindow):
 
     def handle_mode_selection(self, index: int):
         self.stop_processes()
+        self._set_activity_source_ui(video_mode=False)
         if index == 1:
             busy = [w.cam_idx for w in self.active_camera_widgets]
             dlg = CameraSelectionDialog(busy, self)
@@ -587,6 +733,7 @@ class MainWindow(QMainWindow):
                 self, "Открыть видео", "",
                 "Видеофайлы (*.mp4 *.avi *.mkv *.mov)")
             if path:
+                self._set_activity_source_ui(video_mode=True)
                 self.video_stack.setCurrentIndex(2)
                 self.btn_stop.show()
                 self.btn_play_pause.show()
@@ -596,6 +743,10 @@ class MainWindow(QMainWindow):
                 self.ai_worker = VideoWorker(source=path)
                 self.ai_worker.log_signal.connect(self.update_log)
                 self.ai_worker.start()
+                self.update_log(
+                    f"Видео загружено. Для активности выберите зону: "
+                    f"{self._get_video_test_zone()}"
+                )
                 self._reconnect_algo_signals()
             else:
                 self.combo_mode.setCurrentIndex(0)

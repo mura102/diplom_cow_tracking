@@ -9,6 +9,8 @@ import cv2
 from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtGui import QImage
 
+from vision.cv_io import imwrite_unicode
+
 TARGET_FPS        = 30
 FRAME_INTERVAL    = 1.0 / TARGET_FPS
 SNAPSHOT_INTERVAL = 2.0
@@ -107,7 +109,7 @@ class VideoWorker(QThread):
                     ts       = datetime.now()
                     filename = f"snapshot_{ts.strftime('%Y%m%d_%H%M%S_%f')}.jpg"
                     filepath = SNAPSHOTS_DIR / filename
-                    ok = cv2.imwrite(str(filepath), frame)
+                    ok = imwrite_unicode(str(filepath), frame)
                     if ok:
                         self._saved_paths.append(str(filepath))
                         self._saved_timestamps.append(ts)
@@ -211,8 +213,9 @@ class AnalysisWorker(QThread):
         self,
         image_paths: list,
         timestamps: list,
-        camera_location: str = "кормушка",
+        camera_location: str = "кормовая зона",
         cow_number: int = 1,
+        activity_zone: str | None = None,
         parent=None,
     ):
         super().__init__(parent)
@@ -220,6 +223,7 @@ class AnalysisWorker(QThread):
         self.timestamps      = timestamps
         self.camera_location = camera_location
         self.cow_number      = cow_number
+        self.activity_zone   = activity_zone
 
     def run(self):
         try:
@@ -244,33 +248,50 @@ class AnalysisWorker(QThread):
 
         self.progress.emit("Загрузка модели и запуск анализа снимков...")
         FEED_FRAMES_DIR.mkdir(parents=True, exist_ok=True)
-        camera_locations = [self.camera_location] * len(self.image_paths)
+        if self.activity_zone:
+            camera_locations = None
+        else:
+            camera_locations = [self.camera_location] * len(self.image_paths)
 
-        feed_sec_total, drink_sec_total = process_sequence(
+        feed_sec_total, drink_sec_total, recognized_tag, cow_results = process_sequence(
             image_paths=self.image_paths,
-            camera_locations=camera_locations,
+            camera_locations=camera_locations or [self.camera_location] * len(self.image_paths),
             cow_number=self.cow_number,
             interval_sec=SNAPSHOT_INTERVAL,
             show_frames=False,
             save_frames=True,
             output_dir=str(FEED_FRAMES_DIR),
             progress_callback=self.progress.emit,
+            activity_zone=self.activity_zone,
         )
 
         feed_sec_total  = int(round(feed_sec_total))
         drink_sec_total = int(round(drink_sec_total))
 
+        for cr in cow_results:
+            cr["feed_sec"] = int(round(cr["feed_sec"]))
+            cr["drink_sec"] = int(round(cr["drink_sec"]))
+            cr["feed_min"] = cr["feed_sec"] // 60
+            cr["feed_sec_rem"] = cr["feed_sec"] % 60
+            cr["drink_min"] = cr["drink_sec"] // 60
+            cr["drink_sec_rem"] = cr["drink_sec"] % 60
+
         self.progress.emit(
-            f"Результат получен: кормление {feed_sec_total} сек, "
-            f"питьё {drink_sec_total} сек."
+            f"Результат получен: ID={recognized_tag or '—'}, "
+            f"коров={len(cow_results)}, "
+            f"кормление {feed_sec_total} сек, питьё {drink_sec_total} сек."
         )
 
+        zone_label = self.activity_zone or self.camera_location
         return {
             "cow_number": self.cow_number,
-            "camera":     self.camera_location,
+            "recognized_tag": recognized_tag,
+            "camera":     zone_label,
+            "activity_zone": zone_label,
             "num_frames": len(self.image_paths),
             "feed_min":   feed_sec_total  // 60,
             "feed_sec":   feed_sec_total  %  60,
             "drink_min":  drink_sec_total // 60,
             "drink_sec":  drink_sec_total %  60,
+            "cow_results": cow_results,
         }

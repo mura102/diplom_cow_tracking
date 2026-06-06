@@ -58,14 +58,14 @@ cow_monitor/
 │       ├── bestdown.pt            # YOLOv8: поза коровы (лежит/стоит)
 │       └── coweat.pt              # YOLOv8: ест/пьёт
 │
-├── external_bcs/                  # Модуль оценки упитанности (БКС)
-│   ├── bcs_analysis.py            # Логика оценки БКС
-│   ├── db_config.py
+├── external_bcs/                  # Модуль оценки упитанности (БКС) с распознаванием ID
+│   ├── bcs_analysis.py            # Детекция, ID по бирке, BCS, видео, запись в БД
 │   ├── requirements.txt
 │   └── models/
-│       ├── bestcowdetector.pt     # YOLO: детекция коровы
-│       ├── bcsregressor.pth       # Регрессор БКС
+│       ├── best_number_classifier.pt  # YOLO: распознавание номера бирки (1–4)
+│       ├── bcs_regressor.pth      # Регрессор БКС
 │       └── scaler.pkl             # Нормализатор признаков
+│   # Детектор коровы: external_activity/models/cow_eat.pt
 │
 ├── ui/                            # Интерфейс PyQt6
 │   ├── main_window.py             # Главное окно
@@ -103,7 +103,8 @@ cow_monitor/
 Анализирует видео и определяет, ест или пьёт корова. Результаты пишутся в таблицы `sessions` и `frames`.
 
 ### 📊 БКС (`external_bcs`)
-Оценивает упитанность коровы по шкале 1–5. Результаты — в `bcs_sessions` и `bcs_measurements`.
+Оценивает упитанность коровы по шкале 1–5 с **распознаванием ID по бирке** (YOLO-классификатор номера).
+Поддерживает фото и видео. Результаты — в `bcs_sessions` и `bcs_measurements` (поля `recognized_tag`, `frame_number`, `video_path`).
 
 ---
 

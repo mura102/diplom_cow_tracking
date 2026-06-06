@@ -48,6 +48,34 @@ class BcsWorker(QThread):
             self.error.emit(f"{type(e).__name__}: {e}\n\n{traceback.format_exc()}")
 
 
+class BcsVideoWorker(QThread):
+    log_message = pyqtSignal(str)
+    finished    = pyqtSignal(str, list)
+    error       = pyqtSignal(str)
+
+    def __init__(self, video_path: str, result_path: str,
+                 cow_id=None, stream_id=None, parent=None):
+        super().__init__(parent)
+        self.video_path  = video_path
+        self.result_path = result_path
+        self.cow_id      = cow_id
+        self.stream_id   = stream_id
+
+    def run(self):
+        try:
+            from external_bcs.bcs_analysis import process_video
+            output_path, records = process_video(
+                video_path=self.video_path,
+                output_path=self.result_path,
+                cow_id=self.cow_id,
+                stream_id=self.stream_id,
+                logger=self.log_message.emit,
+            )
+            self.finished.emit(output_path, records)
+        except Exception as e:
+            self.error.emit(f"{type(e).__name__}: {e}\n\n{traceback.format_exc()}")
+
+
 # ══════════════════════════════════════════════════════
 #  Главное окно
 # ══════════════════════════════════════════════════════
@@ -62,8 +90,10 @@ class BcsWindow(QDialog):
 
         self._worker      = None
         self._image_path  = None
+        self._video_path  = None
         self._result_path = None
         self._records     = []
+        self._mode        = "image"
 
         self._build_ui()
 
@@ -126,6 +156,10 @@ class BcsWindow(QDialog):
         self.btn_load.setStyleSheet(btn_style_load)
         self.btn_load.clicked.connect(self._load_image)
 
+        self.btn_load_video = QPushButton("Загрузить видео")
+        self.btn_load_video.setStyleSheet(btn_style_load)
+        self.btn_load_video.clicked.connect(self._load_video)
+
         self.btn_run = QPushButton("Запустить расчёт")
         self.btn_run.setStyleSheet(btn_style_run)
         self.btn_run.setEnabled(False)
@@ -138,6 +172,7 @@ class BcsWindow(QDialog):
         )
 
         lay.addWidget(self.btn_load)
+        lay.addWidget(self.btn_load_video)
         lay.addWidget(self.btn_run)
         lay.addWidget(self.lbl_file)
         return frame
@@ -212,7 +247,7 @@ class BcsWindow(QDialog):
         lay.addWidget(lbl_res)
 
         self.table = QTableWidget(0, 3)
-        self.table.setHorizontalHeaderLabels(["Корова", "БКС", "Уверенность"])
+        self.table.setHorizontalHeaderLabels(["ID", "БКС", "Уверенность"])
         self.table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.Stretch
         )
@@ -298,7 +333,9 @@ class BcsWindow(QDialog):
         )
         if not path:
             return
+        self._mode        = "image"
         self._image_path  = path
+        self._video_path  = None
         self._result_path = None
         self._records     = []
 
@@ -311,29 +348,65 @@ class BcsWindow(QDialog):
         self.table.setRowCount(0)
         self.log_box.clear()
         self._show_pixmap(path)
-        self._set_status(f"Загружено: {os.path.basename(path)}")
+        self._set_status(f"Загружено фото: {os.path.basename(path)}")
+
+    def _load_video(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Выберите видео", "",
+            "Видео (*.mp4 *.avi *.mov *.mkv)"
+        )
+        if not path:
+            return
+        self._mode        = "video"
+        self._video_path  = path
+        self._image_path  = None
+        self._result_path = None
+        self._records     = []
+
+        self.lbl_file.setText(os.path.basename(path))
+        self.btn_run.setEnabled(True)
+        self.btn_save.setEnabled(False)
+        self.btn_show_res.setEnabled(False)
+        self.btn_show_src.setChecked(True)
+        self.btn_show_res.setChecked(False)
+        self.table.setRowCount(0)
+        self.log_box.clear()
+        self.lbl_image.setPixmap(QPixmap())
+        self.lbl_image.setText(f"Видео: {os.path.basename(path)}\nНажмите «Запустить расчёт»")
+        self._set_status(f"Загружено видео: {os.path.basename(path)}")
 
     def _run_analysis(self):
-        if not self._image_path:
+        if self._mode == "image" and not self._image_path:
             return
-
-        base, ext = os.path.splitext(self._image_path)
-        result_path = base + "_bcs_result" + ext
+        if self._mode == "video" and not self._video_path:
+            return
 
         self.btn_run.setEnabled(False)
         self.btn_load.setEnabled(False)
+        self.btn_load_video.setEnabled(False)
         self.btn_save.setEnabled(False)
         self.btn_show_res.setEnabled(False)
         self.log_box.clear()
         self.table.setRowCount(0)
         self.progress.setVisible(True)
         self._set_status("Выполняется анализ БКС...")
-        self._append_log("Запуск анализа БКС...")
+        self._append_log("Запуск анализа БКС с распознаванием ID...")
 
-        self._worker = BcsWorker(
-            image_path=self._image_path,
-            result_path=result_path,
-        )
+        if self._mode == "video":
+            base, _ = os.path.splitext(self._video_path)
+            result_path = base + "_bcs_result.mp4"
+            self._worker = BcsVideoWorker(
+                video_path=self._video_path,
+                result_path=result_path,
+            )
+        else:
+            base, ext = os.path.splitext(self._image_path)
+            result_path = base + "_bcs_result" + ext
+            self._worker = BcsWorker(
+                image_path=self._image_path,
+                result_path=result_path,
+            )
+
         self._worker.log_message.connect(self._append_log)
         self._worker.finished.connect(self._on_success)
         self._worker.error.connect(self._on_error)
@@ -343,14 +416,25 @@ class BcsWindow(QDialog):
         self.progress.setVisible(False)
         self.btn_run.setEnabled(True)
         self.btn_load.setEnabled(True)
+        self.btn_load_video.setEnabled(True)
         self._result_path = result_path
         self._records     = records
 
-        self.table.setRowCount(len(records))
-        for row, rec in enumerate(records):
+        display_records = records
+        if self._mode == "video" and records:
+            seen = {}
+            for rec in records:
+                tag = rec.get("cow_id", str(rec.get("cow_number", "")))
+                if tag not in seen or rec["bcs"] > seen[tag]["bcs"]:
+                    seen[tag] = rec
+            display_records = list(seen.values())
+
+        self.table.setRowCount(len(display_records))
+        for row, rec in enumerate(display_records):
             bcs_val = rec["bcs"]
 
-            item_num = QTableWidgetItem(str(rec["cow_number"]))
+            cow_label = rec.get("cow_id", rec.get("cow_number", "—"))
+            item_num = QTableWidgetItem(str(cow_label))
             item_num.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
             item_bcs = QTableWidgetItem(str(bcs_val))
@@ -369,16 +453,26 @@ class BcsWindow(QDialog):
             self.table.setItem(row, 1, item_bcs)
             self.table.setItem(row, 2, item_conf)
 
-        if os.path.exists(result_path):
+        if self._mode == "image" and os.path.exists(result_path):
             self.btn_show_res.setEnabled(True)
             self._switch_image_view("res")
+        elif self._mode == "video" and os.path.exists(result_path):
+            self.lbl_image.setPixmap(QPixmap())
+            self.lbl_image.setText(
+                f"Видео обработано.\nФайл: {os.path.basename(result_path)}\n"
+                f"Записей в БД: {len(records)}"
+            )
 
         has_result = bool(records) and os.path.exists(result_path)
-        self.btn_save.setEnabled(has_result)
+        self.btn_save.setEnabled(has_result and self._mode == "image")
 
         if records:
-            self._set_status(f"Анализ завершён — найдено коров: {len(records)}")
-            self._append_log(f"\nАнализ завершён. Найдено коров: {len(records)}")
+            unique = len({r.get("cow_id", r.get("cow_number")) for r in records})
+            self._set_status(f"Анализ завершён — уникальных коров: {unique}")
+            self._append_log(
+                f"\nАнализ завершён. Уникальных коров: {unique}, "
+                f"всего измерений: {len(records)}"
+            )
         else:
             self._set_status("Анализ завершён — коров не обнаружено")
             self._append_log("\nКоров не обнаружено на изображении.")
@@ -387,6 +481,7 @@ class BcsWindow(QDialog):
         self.progress.setVisible(False)
         self.btn_run.setEnabled(True)
         self.btn_load.setEnabled(True)
+        self.btn_load_video.setEnabled(True)
         self._set_status("Ошибка анализа")
         self._append_log(f"\nОШИБКА:\n{error_text}")
         QMessageBox.critical(

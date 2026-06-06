@@ -6,6 +6,8 @@ __pycache__/
 .env
 snapshots/
 feed_frames/
+sleep_frames/
+bcs_result.jpg
 video/
 .idea/
 .vscode/

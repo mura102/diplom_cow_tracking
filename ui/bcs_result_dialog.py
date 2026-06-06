@@ -35,7 +35,7 @@ class BcsResultDialog(QDialog):
         # Таблица результатов
         if records:
             table = QTableWidget(len(records), 3)
-            table.setHorizontalHeaderLabels(["№ Коровы", "БКС", "Уверенность"])
+            table.setHorizontalHeaderLabels(["ID", "БКС", "Уверенность"])
             table.horizontalHeader().setSectionResizeMode(
                 QHeaderView.ResizeMode.Stretch   # ← PyQt6: ResizeMode.Stretch
             )
@@ -46,7 +46,8 @@ class BcsResultDialog(QDialog):
             table.setAlternatingRowColors(True)
 
             for row, rec in enumerate(records):
-                table.setItem(row, 0, QTableWidgetItem(str(rec["cow_number"])))
+                cow_label = rec.get("cow_id", rec.get("cow_number", "—"))
+                table.setItem(row, 0, QTableWidgetItem(str(cow_label)))
                 table.setItem(row, 1, QTableWidgetItem(str(rec["bcs"])))
                 table.setItem(row, 2, QTableWidgetItem(f"{rec['confidence']:.2f}"))
 

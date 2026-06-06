@@ -120,7 +120,7 @@ def build(mw) -> QWidget:
     mw.combo_camera_activity.setMinimumWidth(160)
     mw.combo_camera_activity.setToolTip(
         "Выберите камеру для анализа активности.\n"
-        "Зона (кормушка/поилка) определяется автоматически по настройкам камеры в БД."
+        "Зона (кормовая/питьевая) определяется автоматически по настройкам камеры в БД."
     )
     camera_row.addWidget(mw.combo_camera_activity, stretch=1)
 
@@ -131,6 +131,34 @@ def build(mw) -> QWidget:
     camera_row.addWidget(mw.btn_refresh_cameras)
 
     col_activity.addLayout(camera_row)
+
+    video_zone_row = QHBoxLayout()
+    video_zone_row.setSpacing(6)
+
+    lbl_video_zone = QLabel("🎬 Зона (видео):")
+    lbl_video_zone.setObjectName("CameraLabel")
+    lbl_video_zone.setFixedWidth(100)
+    video_zone_row.addWidget(lbl_video_zone)
+
+    mw.combo_video_zone = QComboBox()
+    mw.combo_video_zone.addItem("кормовая зона — питание", userData="кормовая зона")
+    mw.combo_video_zone.addItem("питьевая зона — питьё", userData="питьевая зона")
+    mw.combo_video_zone.setToolTip(
+        "Для теста по видеофайлу: выберите зону, где якобы установлена камера.\n"
+        "От этого зависит, считается ли активность кормлением или питьём."
+    )
+    video_zone_row.addWidget(mw.combo_video_zone, stretch=1)
+
+    mw.lbl_video_zone_hint = QLabel("активна при режиме «Видеофайл»")
+    mw.lbl_video_zone_hint.setStyleSheet("color:#565f89; font-size:11px;")
+    video_zone_row.addWidget(mw.lbl_video_zone_hint)
+
+    col_activity.addLayout(video_zone_row)
+    mw._video_zone_row_widgets = (
+        lbl_video_zone, mw.combo_video_zone, mw.lbl_video_zone_hint
+    )
+    for w in mw._video_zone_row_widgets:
+        w.setVisible(False)
 
     mw.btn_detect_activity = QPushButton("🏃 Детекция активности (СТАРТ)")
     mw.btn_detect_activity.setCheckable(True)

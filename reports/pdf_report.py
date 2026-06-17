@@ -112,7 +112,7 @@ def generate_pdf_report(
     activity_stats: list[dict],
     cow_summary: list[dict],
     save_path: str,
-    company_name: str = "Рога и Копыта",
+    company_name: str = "УМНАЯ ФЕРМА",
     period_days: int = 7,
 ) -> str:
     font_name = _register_fonts()

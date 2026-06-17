@@ -185,7 +185,7 @@ def build(mw) -> QWidget:
     # — Блок 3: Расчёт КВС (Стас) —
     col_kvs = QVBoxLayout()
     col_kvs.setSpacing(6)
-    mw.btn_calc_kvs = QPushButton("📊 Расчет КВС (СТАРТ)")
+    mw.btn_calc_kvs = QPushButton("📊 Расчет BCS (СТАРТ)")
     mw.btn_calc_kvs.setCheckable(True)
     mw.btn_calc_kvs.toggled.connect(mw.toggle_kvs_calculation)
     mw.kvs_log_box = QTextEdit()

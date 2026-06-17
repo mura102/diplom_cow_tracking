@@ -700,23 +700,23 @@ class MainWindow(QMainWindow):
         lay.addWidget(btn)
         dlg.exec()
 
-    # ── Расчёт КВС ───────────────────────────────────────────────────
+    # ── Расчёт BCS ───────────────────────────────────────────────────
 
     def toggle_kvs_calculation(self):
         if self._kvs_running:
             return
         self._kvs_running = True
         self._block_other_algos(self.btn_calc_kvs)
-        self.update_kvs_log("Запущен расчёт КВС...")
+        self.update_kvs_log("Запущен расчёт BCS...")
         self.btn_calc_kvs.setEnabled(False)
         self.btn_calc_kvs.setChecked(False)
         window = BcsWindow(parent=self, dark = self.is_dark_theme)
-        self.update_kvs_log(f"DEBUG: is_dark_theme = {self.is_dark_theme}")
+        
         window.exec()
         self.btn_calc_kvs.setEnabled(True)
         self.btn_calc_kvs.setChecked(False)
         self.update_algorithm_buttons_style()
-        self.update_kvs_log("Расчёт КВС завершён.")
+        self.update_kvs_log("Расчёт BCS завершён.")
         self._unblock_all_algos()
         self._kvs_running = False
 

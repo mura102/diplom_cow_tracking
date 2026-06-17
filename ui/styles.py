@@ -780,7 +780,7 @@ QLabel#WarningTitle { color: #d97706; font-size: 22px; font-weight: bold; border
 QPushButton#BtnAcknowledgeWarn { background-color: #f59e0b; color: white; border: none; border-radius: 6px; font-weight: bold; padding: 12px 30px; }
 QPushButton#BtnAcknowledgeWarn:hover { background-color: #d97706; }
 
-QFrame#InfoPopup { background-color: #ffffff; border: 3px solid #3b82f6; border-radius: 12px; }
+QFrame#InfoPopup { background-color: #ffffff; border: 2px solid #e5e7eb; border-radius: 12px; }
 QLabel#InfoTitle { color: #2563eb; font-size: 22px; font-weight: bold; border: none; }
 QPushButton#BtnAcknowledgeInfo { background-color: #3b82f6; color: white; border: none; border-radius: 6px; font-weight: bold; padding: 12px 30px; }
 QPushButton#BtnAcknowledgeInfo:hover { background-color: #2563eb; }

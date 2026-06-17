@@ -44,7 +44,7 @@ def _data(cell, value, row_idx: int, severity: str = ""):
 def generate_excel_report(
     notifications: list[dict],
     save_path: str,
-    company_name: str = "Рога и Копыта",
+    company_name: str = "УМНАЯ ФЕРМА",
 ) -> str:
     wb = openpyxl.Workbook()
     ws = wb.active

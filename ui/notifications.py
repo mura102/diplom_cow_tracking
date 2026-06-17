@@ -37,6 +37,7 @@ class LoginDialog(QDialog):
     """
     Диалоговое окно авторизации при входе в систему.
     Поддерживает сохранение логина/пароля через QSettings (пароль обфусцирован base64).
+    Всегда отображается в светлой теме.
     """
 
     def __init__(self, parent=None):
@@ -46,19 +47,16 @@ class LoginDialog(QDialog):
         self.setModal(True)
         self.setFixedSize(400, 340)
 
-        self.role             = None
-        self._login_attempts  = 0
-        self.settings         = QSettings("RogaIKopyta", "ERP_Auth")
+        self.role            = None
+        self._login_attempts = 0
+        self.settings        = QSettings("UmnayaFerma", "ERP_Auth")
 
-        # Наследуем стили родителя или применяем тёмную тему по умолчанию
-        if parent:
-            self.setStyleSheet(parent.styleSheet())
-        else:
-            try:
-                from ui.styles import STYLESHEET_DARK
-                self.setStyleSheet(STYLESHEET_DARK)
-            except ImportError:
-                pass
+        # Всегда светлая тема для окна авторизации
+        try:
+            from ui.styles import STYLESHEET_LIGHT
+            self.setStyleSheet(STYLESHEET_LIGHT)
+        except ImportError:
+            pass
 
         self._init_ui()
         self._center_on_screen()
@@ -91,8 +89,7 @@ class LoginDialog(QDialog):
         )
         layout.addWidget(title)
 
-        # Поле логина — стиль берётся из темы через objectName,
-        # не хардкодим цвета inline чтобы смена темы работала корректно
+        # Поле логина
         self.txt_username = QLineEdit()
         self.txt_username.setObjectName("LoginInput")
         self.txt_username.setPlaceholderText("Логин (sa, dir, vet)")
@@ -114,15 +111,15 @@ class LoginDialog(QDialog):
         self.btn_show_pass.setFixedSize(36, 36)
         self.btn_show_pass.setStyleSheet("""
             QPushButton {
-                background-color: #16161e;
-                color: #a9b1d6;
-                border: 1px solid #292e42;
+                background-color: #f9fafb;
+                color: #1f2937;
+                border: 1px solid #d1d5db;
                 border-radius: 6px;
                 font-size: 14px;
                 padding: 0;
             }
-            QPushButton:hover { background-color: #24283b; }
-            QPushButton:checked { background-color: #292e42; color: #7aa2f7; }
+            QPushButton:hover { background-color: #e5e7eb; }
+            QPushButton:checked { background-color: #dbeafe; color: #2563eb; }
         """)
         self.btn_show_pass.toggled.connect(self._toggle_password_visibility)
 
@@ -133,14 +130,14 @@ class LoginDialog(QDialog):
         # Чекбокс «Запомнить пароль»
         self.chk_remember = QCheckBox("Запомнить пароль")
         self.chk_remember.setStyleSheet(
-            "QCheckBox { color: #a9b1d6; font-size: 12px; border: none; }"
+            "QCheckBox { color: #4b5563; font-size: 12px; border: none; }"
         )
         layout.addWidget(self.chk_remember)
 
         # Метка ошибок
         self.lbl_error = QLabel("")
         self.lbl_error.setStyleSheet(
-            "color: #f7768e; font-size: 12px; border: none;"
+            "color: #dc2626; font-size: 12px; border: none;"
         )
         self.lbl_error.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lbl_error.setWordWrap(True)
@@ -170,7 +167,6 @@ class LoginDialog(QDialog):
             self.btn_show_pass.setText("👁️")
 
     def attempt_login(self):
-        # Блокировка после превышения лимита попыток
         if self._login_attempts >= _MAX_LOGIN_ATTEMPTS:
             self.lbl_error.setText(
                 f"Превышен лимит попыток ({_MAX_LOGIN_ATTEMPTS}). "
@@ -182,7 +178,6 @@ class LoginDialog(QDialog):
         username = self.txt_username.text().strip()
         password = self.txt_password.text().strip()
 
-        # Защита от пустых полей
         if not username or not password:
             self.lbl_error.setText("Заполните логин и пароль.")
             return
@@ -204,14 +199,13 @@ class LoginDialog(QDialog):
 
     def _save_credentials(self, username: str, password: str):
         if self.chk_remember.isChecked():
-            self.settings.setValue("remember",  True)
-            self.settings.setValue("username",  username)
-            # Пароль сохраняется обфусцированным, не открытым текстом
-            self.settings.setValue("password",  _encode(password))
+            self.settings.setValue("remember", True)
+            self.settings.setValue("username", username)
+            self.settings.setValue("password", _encode(password))
         else:
-            self.settings.setValue("remember",  False)
-            self.settings.setValue("username",  "")
-            self.settings.setValue("password",  "")
+            self.settings.setValue("remember", False)
+            self.settings.setValue("username", "")
+            self.settings.setValue("password", "")
 
     def _load_saved_credentials(self):
         remember = self.settings.value("remember", False, type=bool)
@@ -223,7 +217,6 @@ class LoginDialog(QDialog):
             )
 
     def keyPressEvent(self, event: QKeyEvent):
-        # Escape — отмена, Enter — попытка входа
         if event.key() == Qt.Key.Key_Escape:
             self.reject()
         elif event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
@@ -255,7 +248,6 @@ class BaseNotification(QDialog):
         super().__init__(parent)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
         self.setModal(True)
-        # Минимальный размер — растягивается под контент
         self.setMinimumSize(700, 400)
         self.setSizePolicy(
             QSizePolicy.Policy.Preferred,
@@ -295,7 +287,6 @@ class BaseNotification(QDialog):
         self.btn_close.clicked.connect(self.accept)
         layout.addWidget(self.btn_close, alignment=Qt.AlignmentFlag.AlignCenter)
 
-        # Подгоняем размер окна под содержимое и центрируем
         self.adjustSize()
         self.main_frame.adjustSize()
         self._center_on_screen()
@@ -310,7 +301,6 @@ class BaseNotification(QDialog):
             )
 
     def keyPressEvent(self, event: QKeyEvent):
-        # Enter и Escape оба закрывают уведомление
         if event.key() in (
             Qt.Key.Key_Return,
             Qt.Key.Key_Enter,

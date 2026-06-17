@@ -256,7 +256,7 @@ class BaseNotification(QDialog):
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
         self.setModal(True)
         # Минимальный размер — растягивается под контент
-        self.setMinimumSize(500, 220)
+        self.setMinimumSize(700, 400)
         self.setSizePolicy(
             QSizePolicy.Policy.Preferred,
             QSizePolicy.Policy.Minimum,
@@ -297,6 +297,7 @@ class BaseNotification(QDialog):
 
         # Подгоняем размер окна под содержимое и центрируем
         self.adjustSize()
+        self.main_frame.adjustSize()
         self._center_on_screen()
 
     def _center_on_screen(self):

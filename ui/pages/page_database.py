@@ -28,9 +28,7 @@ def build(mw) -> QWidget:
             "⛔ ДОСТУП ОГРАНИЧЕН\n\n"
             "У вас нет прав для просмотра и редактирования базы данных.")
         placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        placeholder.setStyleSheet(
-            "font-size: 16px; font-weight: bold; color: #f7768e;"
-            "border: none; margin-top: 100px;")
+        placeholder.setStyleSheet("AccessDeniedLabel")
         layout.addWidget(placeholder, stretch=1)
     else:
         mw.sql_input = QTextEdit()

@@ -16,7 +16,7 @@ from PyQt6.QtGui import QPixmap, QFont, QColor
 
 
 # ══════════════════════════════════════════════════════
-#  Фоновый поток
+#  Фоновые потоки
 # ══════════════════════════════════════════════════════
 
 class BcsWorker(QThread):
@@ -82,12 +82,52 @@ class BcsVideoWorker(QThread):
 
 class BcsWindow(QDialog):
 
-    def __init__(self, parent=None):
+    # ── Цветовые палитры ──────────────────────────────
+    _DARK = {
+        "bg_main":    "#1a1b26",
+        "bg_card":    "#1e2030",
+        "bg_deep":    "#16161e",
+        "bg_btn":     "#24283b",
+        "bg_hover":   "#3b4261",
+        "text":       "#a9b1d6",
+        "text_muted": "#565f89",
+        "accent":     "#7aa2f7",
+        "border":     "#292e42",
+        "run_bg":     "#9ece6a",
+        "run_text":   "#1a1b26",
+        "run_hover":  "#b9f27c",
+        "save_bg":    "#e0af68",
+        "save_hover": "#fac970",
+        "disabled_bg":"#2d3149",
+        "disabled_fg":"#555555",
+    }
+
+    _LIGHT = {
+        "bg_main":    "#f0f2f5",
+        "bg_card":    "#ffffff",
+        "bg_deep":    "#f9fafb",
+        "bg_btn":     "#e5e7eb",
+        "bg_hover":   "#d1d5db",
+        "text":       "#1f2937",
+        "text_muted": "#6b7280",
+        "accent":     "#2563eb",
+        "border":     "#d1d5db",
+        "run_bg":     "#22c55e",
+        "run_text":   "#ffffff",
+        "run_hover":  "#16a34a",
+        "save_bg":    "#f59e0b",
+        "save_hover": "#d97706",
+        "disabled_bg":"#e5e7eb",
+        "disabled_fg":"#9ca3af",
+    }
+
+    def __init__(self, parent=None, dark: bool = True):
         super().__init__(parent)
         self.setWindowTitle("Расчёт БКС / КВС")
         self.setMinimumSize(1000, 680)
         self.setModal(True)
 
+        self._dark        = dark
         self._worker      = None
         self._image_path  = None
         self._video_path  = None
@@ -96,6 +136,157 @@ class BcsWindow(QDialog):
         self._mode        = "image"
 
         self._build_ui()
+        self._apply_theme()
+
+    # ─────────────────────────────────────────────────
+    #  Тема
+    # ─────────────────────────────────────────────────
+
+    def _t(self) -> dict:
+        return self._DARK if self._dark else self._LIGHT
+
+    def _apply_theme(self):
+        t = self._t()
+
+        # Глобальный stylesheet диалога
+        self.setStyleSheet(f"""
+            QDialog {{
+                background-color: {t['bg_main']};
+            }}
+            QWidget {{
+                color: {t['text']};
+                background-color: {t['bg_main']};
+            }}
+            QLabel {{
+                color: {t['text']};
+                background-color: transparent;
+                border: none;
+            }}
+            QSplitter::handle {{
+                background: {t['border']};
+            }}
+        """)
+
+        # Заголовок
+        self.lbl_title.setStyleSheet(f"color: {t['accent']}; border: none;")
+
+        # Прогресс-бар
+        self.progress.setStyleSheet(f"""
+            QProgressBar {{ border: none; background: {t['bg_deep']}; }}
+            QProgressBar::chunk {{ background: {t['accent']}; border-radius: 2px; }}
+        """)
+
+        # Панель управления
+        self.frame_controls.setStyleSheet(
+            f"QFrame {{ background: {t['bg_card']}; border-radius: 6px; }}"
+        )
+
+        btn_load_style = f"""
+            QPushButton {{
+                background: {t['bg_btn']}; color: {t['text']};
+                border: 1px solid {t['border']}; border-radius: 4px;
+                font-size: 13px; padding: 7px 16px;
+            }}
+            QPushButton:hover {{ background: {t['bg_hover']}; }}
+        """
+        btn_run_style = f"""
+            QPushButton {{
+                background: {t['run_bg']}; color: {t['run_text']};
+                font-weight: bold; border-radius: 4px;
+                font-size: 13px; padding: 7px 16px; border: none;
+            }}
+            QPushButton:disabled {{
+                background: {t['disabled_bg']}; color: {t['disabled_fg']};
+            }}
+            QPushButton:hover:enabled {{ background: {t['run_hover']}; }}
+        """
+        self.btn_load.setStyleSheet(btn_load_style)
+        self.btn_load_video.setStyleSheet(btn_load_style)
+        self.btn_run.setStyleSheet(btn_run_style)
+        self.lbl_file.setStyleSheet(
+            f"color: {t['text_muted']}; font-size: 12px; border: none;"
+        )
+
+        # Панель изображения
+        self.frame_image.setStyleSheet(
+            f"QFrame {{ background: {t['bg_card']}; border-radius: 6px; }}"
+        )
+        btn_tab_style = f"""
+            QPushButton {{
+                background: {t['bg_btn']}; color: {t['text']};
+                border: 1px solid {t['border']}; border-radius: 4px;
+                font-size: 13px; padding: 6px 12px;
+            }}
+            QPushButton:checked {{
+                background: {t['accent']}; color: {'#1a1b26' if self._dark else '#ffffff'};
+                font-weight: bold;
+            }}
+            QPushButton:hover:!checked {{ background: {t['bg_hover']}; }}
+            QPushButton:disabled {{ color: {t['disabled_fg']}; border-color: {t['border']}; }}
+        """
+        self.btn_show_src.setStyleSheet(btn_tab_style)
+        self.btn_show_res.setStyleSheet(btn_tab_style)
+        self.lbl_image.setStyleSheet(f"""
+            QLabel {{
+                background: {t['bg_deep']}; color: {t['text_muted']};
+                border: 2px dashed {t['border']}; border-radius: 6px; font-size: 14px;
+            }}
+        """)
+
+        # Панель результатов
+        self.frame_results.setStyleSheet(
+            f"QFrame {{ background: {t['bg_card']}; border-radius: 6px; }}"
+        )
+        self.lbl_results_title.setStyleSheet(
+            f"color: {t['text']}; font-weight: bold; font-size: 13px; border: none;"
+        )
+        self.lbl_log_title.setStyleSheet(
+            f"color: {t['text']}; font-weight: bold; font-size: 13px; border: none;"
+        )
+        self.table.setStyleSheet(f"""
+            QTableWidget {{
+                background: {t['bg_deep']}; color: {t['text']};
+                border: 1px solid {t['border']}; gridline-color: {t['border']};
+            }}
+            QHeaderView::section {{
+                background: {t['bg_btn']}; color: {t['accent']};
+                border: 1px solid {t['border']}; padding: 4px; font-weight: bold;
+            }}
+            QTableWidget::item:alternate {{ background: {t['bg_card']}; }}
+            QHeaderView::section:vertical {{ width: 0; border: none; }}
+        """)
+        self.log_box.setStyleSheet(f"""
+            QTextEdit {{
+                background: {t['bg_deep']}; color: {t['text']};
+                font-family: Consolas, monospace; font-size: 12px;
+                border: 1px solid {t['border']}; border-radius: 4px;
+            }}
+        """)
+
+        # Нижняя панель
+        self.frame_bottom.setStyleSheet("QFrame { background: transparent; }")
+        self.lbl_status.setStyleSheet(
+            f"color: {t['text_muted']}; font-size: 12px; border: none;"
+        )
+        self.btn_save.setStyleSheet(f"""
+            QPushButton {{
+                background: {t['save_bg']}; color: {'#1a1b26' if self._dark else '#ffffff'};
+                font-weight: bold; border-radius: 4px;
+                font-size: 13px; padding: 7px 18px; border: none;
+            }}
+            QPushButton:disabled {{
+                background: {t['disabled_bg']}; color: {t['disabled_fg']};
+            }}
+            QPushButton:hover:enabled {{ background: {t['save_hover']}; }}
+        """)
+        self.btn_close.setStyleSheet(f"""
+            QPushButton {{
+                background: {t['bg_btn']}; color: {t['text']};
+                border: 1px solid {t['border']}; border-radius: 4px;
+                font-size: 13px; padding: 7px 18px;
+            }}
+            QPushButton:hover {{ background: {t['bg_hover']}; }}
+        """)
 
     # ─────────────────────────────────────────────────
     #  Построение UI
@@ -106,10 +297,9 @@ class BcsWindow(QDialog):
         root.setContentsMargins(12, 12, 12, 12)
         root.setSpacing(8)
 
-        title = QLabel("Анализ упитанности (БКС / КВС)")
-        title.setFont(QFont("Segoe UI", 15, QFont.Weight.Bold))
-        title.setStyleSheet("color: #7aa2f7; border: none;")
-        root.addWidget(title)
+        self.lbl_title = QLabel("Анализ упитанности (БКС / КВС)")
+        self.lbl_title.setFont(QFont("Segoe UI", 15, QFont.Weight.Bold))
+        root.addWidget(self.lbl_title)
 
         root.addWidget(self._build_controls())
 
@@ -117,10 +307,6 @@ class BcsWindow(QDialog):
         self.progress.setRange(0, 0)
         self.progress.setFixedHeight(4)
         self.progress.setVisible(False)
-        self.progress.setStyleSheet(
-            "QProgressBar { border:none; background:#1e1e2e; }"
-            "QProgressBar::chunk { background:#7aa2f7; border-radius:2px; }"
-        )
         root.addWidget(self.progress)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -132,41 +318,22 @@ class BcsWindow(QDialog):
         root.addWidget(self._build_bottom_bar())
 
     def _build_controls(self) -> QFrame:
-        frame = QFrame()
-        frame.setStyleSheet("QFrame { background:#1e2030; border-radius:6px; }")
-        lay = QHBoxLayout(frame)
+        self.frame_controls = QFrame()
+        lay = QHBoxLayout(self.frame_controls)
         lay.setContentsMargins(10, 6, 10, 6)
         lay.setSpacing(10)
 
-        btn_style_load = (
-            "QPushButton { background:#24283b; color:#a9b1d6;"
-            " border:1px solid #292e42; border-radius:4px;"
-            " font-size:13px; padding:7px 16px; }"
-            "QPushButton:hover { background:#3b4261; }"
-        )
-        btn_style_run = (
-            "QPushButton { background:#9ece6a; color:#1a1b26;"
-            " font-weight:bold; border-radius:4px;"
-            " font-size:13px; padding:7px 16px; }"
-            "QPushButton:disabled { background:#2d3149; color:#555; }"
-            "QPushButton:hover:enabled { background:#b9f27c; }"
-        )
-
         self.btn_load = QPushButton("Загрузить фото")
-        self.btn_load.setStyleSheet(btn_style_load)
         self.btn_load.clicked.connect(self._load_image)
 
         self.btn_load_video = QPushButton("Загрузить видео")
-        self.btn_load_video.setStyleSheet(btn_style_load)
         self.btn_load_video.clicked.connect(self._load_video)
 
         self.btn_run = QPushButton("Запустить расчёт")
-        self.btn_run.setStyleSheet(btn_style_run)
         self.btn_run.setEnabled(False)
         self.btn_run.clicked.connect(self._run_analysis)
 
         self.lbl_file = QLabel("Файл не выбран")
-        self.lbl_file.setStyleSheet("color:#565f89; font-size:12px; border:none;")
         self.lbl_file.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
         )
@@ -175,41 +342,23 @@ class BcsWindow(QDialog):
         lay.addWidget(self.btn_load_video)
         lay.addWidget(self.btn_run)
         lay.addWidget(self.lbl_file)
-        return frame
+        return self.frame_controls
 
     def _build_image_panel(self) -> QFrame:
-        frame = QFrame()
-        frame.setStyleSheet("QFrame { background:#1a1b26; border-radius:6px; }")
-        lay = QVBoxLayout(frame)
+        self.frame_image = QFrame()
+        lay = QVBoxLayout(self.frame_image)
         lay.setContentsMargins(8, 8, 8, 8)
         lay.setSpacing(6)
 
         tab_row = QHBoxLayout()
         tab_row.setSpacing(6)
 
-        btn_tab_style = (
-            "QPushButton {"
-            "  background:#24283b; color:#a9b1d6;"
-            "  border:1px solid #292e42; border-radius:4px;"
-            "  font-size:13px; padding:6px 12px;"
-            "}"
-            "QPushButton:checked {"
-            "  background:#7aa2f7; color:#1a1b26; font-weight:bold;"
-            "}"
-            "QPushButton:hover:!checked { background:#3b4261; }"
-            "QPushButton:disabled { color:#444; border-color:#222; }"
-        )
-
         self.btn_show_src = QPushButton("Исходное фото")
         self.btn_show_res = QPushButton("Результат")
 
         for b in (self.btn_show_src, self.btn_show_res):
             b.setCheckable(True)
-            b.setSizePolicy(
-                QSizePolicy.Policy.Expanding,
-                QSizePolicy.Policy.Fixed
-            )
-            b.setStyleSheet(btn_tab_style)
+            b.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
         self.btn_show_src.setChecked(True)
         self.btn_show_res.setEnabled(False)
@@ -222,105 +371,60 @@ class BcsWindow(QDialog):
 
         self.lbl_image = QLabel("Загрузите изображение")
         self.lbl_image.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl_image.setStyleSheet(
-            "QLabel { background:#16161e; color:#565f89;"
-            " border:2px dashed #292e42; border-radius:6px; font-size:14px; }"
-        )
         self.lbl_image.setMinimumHeight(420)
         self.lbl_image.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
         lay.addWidget(self.lbl_image, stretch=1)
-        return frame
+        return self.frame_image
 
     def _build_results_panel(self) -> QFrame:
-        frame = QFrame()
-        frame.setStyleSheet("QFrame { background:#1a1b26; border-radius:6px; }")
-        lay = QVBoxLayout(frame)
+        self.frame_results = QFrame()
+        lay = QVBoxLayout(self.frame_results)
         lay.setContentsMargins(8, 8, 8, 8)
         lay.setSpacing(8)
 
-        lbl_res = QLabel("Результаты по коровам")
-        lbl_res.setStyleSheet(
-            "color:#a9b1d6; font-weight:bold; font-size:13px; border:none;"
-        )
-        lay.addWidget(lbl_res)
+        self.lbl_results_title = QLabel("Результаты по коровам")
+        lay.addWidget(self.lbl_results_title)
 
         self.table = QTableWidget(0, 3)
         self.table.setHorizontalHeaderLabels(["ID", "БКС", "Уверенность"])
-        self.table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.Stretch
-        )
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.verticalHeader().setVisible(False)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.setAlternatingRowColors(True)
         self.table.setFixedHeight(200)
-        self.table.setStyleSheet(
-            "QTableWidget { background:#1e2030; color:#a9b1d6;"
-            " border:1px solid #292e42; gridline-color:#292e42; }"
-            "QHeaderView::section { background:#24283b; color:#7aa2f7;"
-            " border:1px solid #292e42; padding:4px; font-weight:bold; }"
-            "QTableWidget::item:alternate { background:#1a1b26; }"
-            "QHeaderView::section:vertical { width:0; border:none; }"
-        )
         lay.addWidget(self.table)
 
-        lbl_log = QLabel("Лог выполнения")
-        lbl_log.setStyleSheet(
-            "color:#a9b1d6; font-weight:bold; font-size:13px; border:none;"
-        )
-        lay.addWidget(lbl_log)
+        self.lbl_log_title = QLabel("Лог выполнения")
+        lay.addWidget(self.lbl_log_title)
 
         self.log_box = QTextEdit()
         self.log_box.setReadOnly(True)
-        self.log_box.setStyleSheet(
-            "QTextEdit { background:#16161e; color:#a9b1d6;"
-            " font-family:Consolas,monospace; font-size:12px;"
-            " border:1px solid #292e42; border-radius:4px; }"
-        )
         self.log_box.setPlaceholderText("Здесь будет отображаться ход выполнения...")
         lay.addWidget(self.log_box, stretch=1)
-        return frame
+        return self.frame_results
 
     def _build_bottom_bar(self) -> QFrame:
-        frame = QFrame()
-        frame.setStyleSheet("QFrame { background:transparent; }")
-        lay = QHBoxLayout(frame)
+        self.frame_bottom = QFrame()
+        lay = QHBoxLayout(self.frame_bottom)
         lay.setContentsMargins(0, 4, 0, 0)
         lay.setSpacing(8)
 
         self.lbl_status = QLabel("Ожидание загрузки изображения...")
-        self.lbl_status.setStyleSheet("color:#565f89; font-size:12px; border:none;")
-
-        # Одинаковый стиль padding для обеих кнопок — одинаковый размер
-        btn_bottom_style_save = (
-            "QPushButton { background:#e0af68; color:#1a1b26;"
-            " font-weight:bold; border-radius:4px;"
-            " font-size:13px; padding:7px 18px; }"
-            "QPushButton:disabled { background:#2d3149; color:#555; }"
-            "QPushButton:hover:enabled { background:#fac970; }"
-        )
-        btn_bottom_style_close = (
-            "QPushButton { background:#24283b; color:#a9b1d6;"
-            " border:1px solid #292e42; border-radius:4px;"
-            " font-size:13px; padding:7px 18px; }"
-            "QPushButton:hover { background:#3b4261; }"
-        )
 
         self.btn_save = QPushButton("Сохранить")
         self.btn_save.setEnabled(False)
-        self.btn_save.setStyleSheet(btn_bottom_style_save)
         self.btn_save.clicked.connect(self._save_result)
 
-        btn_close = QPushButton("Закрыть")
-        btn_close.setStyleSheet(btn_bottom_style_close)
-        btn_close.clicked.connect(self.reject)
+        self.btn_close = QPushButton("Закрыть")
+        self.btn_close.clicked.connect(self.reject)
 
         lay.addWidget(self.lbl_status)
         lay.addStretch()
         lay.addWidget(self.btn_save)
-        lay.addWidget(btn_close)
-        return frame
+        lay.addWidget(self.btn_close)
+        return self.frame_bottom
 
     # ─────────────────────────────────────────────────
     #  Логика
@@ -431,9 +535,9 @@ class BcsWindow(QDialog):
 
         self.table.setRowCount(len(display_records))
         for row, rec in enumerate(display_records):
-            bcs_val = rec["bcs"]
-
+            bcs_val   = rec["bcs"]
             cow_label = rec.get("cow_id", rec.get("cow_number", "—"))
+
             item_num = QTableWidgetItem(str(cow_label))
             item_num.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 

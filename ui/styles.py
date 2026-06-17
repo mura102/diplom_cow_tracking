@@ -18,6 +18,12 @@ QLabel {
     background-color: transparent;
 }
 
+QLabel#AccessDeniedLabel {
+    font-size: 16px; font-weight: bold;
+    color: #f7768e;
+    border: none; margin-top: 100px;
+}
+
 QDialog {
     background-color: #1a1b26;
 }
@@ -496,6 +502,12 @@ QLabel {
     background-color: transparent;
 }
 
+QLabel#AccessDeniedLabel {
+    font-size: 16px; font-weight: bold;
+    color: #dc2626;
+    border: none; margin-top: 100px;
+}
+
 QDialog {
     background-color: #f0f2f5;
 }
@@ -774,18 +786,19 @@ QPushButton#BtnAcknowledgeInfo { background-color: #3b82f6; color: white; border
 QPushButton#BtnAcknowledgeInfo:hover { background-color: #2563eb; }
 
 QLabel#NotifText { color: #374151; font-size: 15px; border: none; background: transparent; }
+
 QLabel#VideoPlaceholder {
-    background-color: #1e1e2e;
+    background-color: #e2e8f0;
     border-radius: 10px;
-    color: #94a3b8;
+    color: #64748b;
     font-weight: bold;
 }
 QLabel#VideoStream {
-    background-color: #1e1e2e;
+    background-color: #e2e8f0;
     border-radius: 10px;
 }
 QVideoWidget#VideoPlayer {
-    background-color: #1e1e2e;
+    background-color: #000000;
     border-radius: 10px;
 }
 QTextEdit#LogBox {

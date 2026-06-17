@@ -44,7 +44,7 @@ class MainWindow(QMainWindow):
     def __init__(self, role: str = "sa"):
         super().__init__()
         self.user_role = role
-        self.setWindowTitle("Рога и копыта AI v4.0 — ERP Система")
+        self.setWindowTitle("УМНАЯ ФЕРМА - Система мониторинга AI")
         self.setMinimumSize(900, 600)
 
         screen = QApplication.primaryScreen()
@@ -99,6 +99,7 @@ class MainWindow(QMainWindow):
 
     def _init_ui(self):
         central = QWidget()
+        central.setObjectName("centralWidget")
         self.setCentralWidget(central)
         root = QHBoxLayout(central)
         root.setContentsMargins(0, 0, 0, 0)
@@ -127,7 +128,7 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(15, 30, 15, 30)
         layout.setSpacing(10)
 
-        title = QLabel("РОГА И КОПЫТА")
+        title = QLabel("УМНАЯ ФЕРМА")
         title.setObjectName("Title")
         title.setFont(QFont("Segoe UI", 20, QFont.Weight.Bold))
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -240,12 +241,40 @@ class MainWindow(QMainWindow):
 
     def toggle_theme(self):
         self.is_dark_theme = not self.is_dark_theme
-        self.setStyleSheet(STYLESHEET_DARK if self.is_dark_theme else STYLESHEET_LIGHT)
+        sheet = STYLESHEET_DARK if self.is_dark_theme else STYLESHEET_LIGHT
+        QApplication.instance().setStyleSheet(sheet)
+        self.setStyleSheet("")
+
         self.btn_theme.setText("☀️ СВЕТЛАЯ ТЕМА" if self.is_dark_theme else "🌙 ТЕМНАЯ ТЕМА")
+
+        # Кнопка play/pause
+        play_color = "#3b82f6" if not self.is_dark_theme else "#7aa2f7"
+        self.btn_play_pause.setStyleSheet(
+            f"background-color: {play_color}; color: white;")
+
+        # Подсказка зоны видео
+        hint_color = "#565f89" if self.is_dark_theme else "#9ca3af"
+        self.lbl_video_zone_hint.setStyleSheet(
+            f"color:{hint_color}; font-size:11px;")
+
+        # Цвет статус-бара
+        db_color = ("#9ece6a" if DB_AVAILABLE else "#f7768e") if self.is_dark_theme \
+            else ("#16a34a" if DB_AVAILABLE else "#dc2626")
+        self.lbl_status_db.setStyleSheet(
+            f"color: {db_color}; font-weight: bold; border: none;")
+
         self._apply_titles_style()
+        self.style().unpolish(self)
+        self.style().polish(self)
+        self.update()
+
         for w in self.active_camera_widgets:
             w.set_dark_theme(self.is_dark_theme)
         self.update_algorithm_buttons_style()
+        self.centralWidget().setStyleSheet(
+            "QWidget#centralWidget { background-color: #f0f2f5; }" if not self.is_dark_theme
+            else "QWidget#centralWidget { background-color: #1a1b26; }"
+        )
 
     def _apply_titles_style(self):
         color = "#7aa2f7" if self.is_dark_theme else "#2563eb"
@@ -681,7 +710,8 @@ class MainWindow(QMainWindow):
         self.update_kvs_log("Запущен расчёт КВС...")
         self.btn_calc_kvs.setEnabled(False)
         self.btn_calc_kvs.setChecked(False)
-        window = BcsWindow(parent=self)
+        window = BcsWindow(parent=self, dark = self.is_dark_theme)
+        self.update_kvs_log(f"DEBUG: is_dark_theme = {self.is_dark_theme}")
         window.exec()
         self.btn_calc_kvs.setEnabled(True)
         self.btn_calc_kvs.setChecked(False)
@@ -1048,7 +1078,7 @@ class MainWindow(QMainWindow):
         BaseReportDialog(
             parent=self, report_type="excel",
             conn_params=self._get_conn_params(),
-            company_name="Рога и Копыта",
+            company_name="УМНАЯ ФЕРМА",
         ).exec()
 
     def _open_pdf_report_dialog(self):
@@ -1060,7 +1090,7 @@ class MainWindow(QMainWindow):
         BaseReportDialog(
             parent=self, report_type="pdf",
             conn_params=self._get_conn_params(),
-            company_name="Рога и Копыта",
+            company_name="УМНАЯ ФЕРМА",
         ).exec()
 
     # ═══════════════════════════════════════════════════════════════════
@@ -1074,7 +1104,7 @@ class MainWindow(QMainWindow):
 
     def show_about_info(self):
         InfoAlert(self, "О ПРОГРАММЕ",
-                  "ИС 'Рога и Копыта' v4.0\nРазработка: ИСТ-418Б").exec()
+                  "ИС 'Умная Ферма'\n\nРазработка студентами группы ИСТ-418Б:\nГафаров Мурат Радикович\nЕременко Станислав Викторович\nЗакирова Рената Винеровна").exec()
 
     def closeEvent(self, event):
         self.stop_processes()

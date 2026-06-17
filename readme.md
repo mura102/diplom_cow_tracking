@@ -1,6 +1,12 @@
-# 🐄 Cow Monitor
+# 🐄 Умная Ферма AI
 
-Система видеоаналитики для мониторинга КРС. Детектирует активность (кормление/водопой), сон и оценивает упитанность (БКС) по видеопотоку с камер.
+Интеллектуальная система видеоаналитики для мониторинга крупного рогатого скота (КРС).  
+Детектирует активность (кормление/водопой), анализирует сон и оценивает упитанность (БКС/КВС) по видеопотоку с камер.
+
+Разработка студентами группы ИСТ-418Б:
+- Гафаров Мурат Радикович
+- Еременко Станислав Викторович
+- Закирова Рената Винеровна
 
 ---
 
@@ -8,13 +14,13 @@
 
 ```bash
 git clone <repo_url>
-cd cow_monitor
+cd diplom_cow_tracking
 
-python -m venv venv
+python -m venv .venv
 # Windows:
-venv\Scripts\activate
+.venv\Scripts\activate
 # Linux/Mac:
-source venv/bin/activate
+source .venv/bin/activate
 
 pip install -r requirements.txt
 
@@ -30,108 +36,136 @@ python main.py
 ```env
 DB_HOST=localhost
 DB_PORT=5432
-DB_NAME=cow_monitor
+DB_NAME=cow_tracking_db
 DB_USER=postgres
 DB_PASSWORD=yourpassword
 ```
+
+> ⚠️ Файл `.env` не коммитится в репозиторий!
+
+---
+
+## Роли пользователей
+
+| Логин | Пароль | Роль |
+|---|---|---|
+| `sa` | `sa` | Администратор — полный доступ |
+| `dir` | `dir` | Директор — просмотр и отчёты |
+| `vet` | `vet` | Ветеринар — только мониторинг |
 
 ---
 
 ## Структура проекта
 
 ```
-cow_monitor/
+diplom_cow_tracking/
 │
 ├── main.py                        # Точка входа
 │
 ├── database/                      # БД: модели, подключение, инициализация
 │   ├── database.py                # engine, SessionLocal, Base
 │   ├── models.py                  # Все SQLAlchemy-модели
-│   ├── initdb.py                  # Создание таблиц
-│   └── reportsdb.py               # Запросы для отчётов
+│   ├── init_db.py                 # Создание таблиц
+│   ├── db_startup.py              # Проверка подключения при старте
+│   └── reports_db.py              # Запросы для отчётов
 │
 ├── external_activity/             # Модуль активности (ест/пьёт)
 │   ├── activity_analysis.py       # Основная логика анализа
 │   ├── sleep_analysis.py          # Анализ сна (лежит/стоит)
-│   ├── db_config.py               # Подключение к БД для модуля
 │   └── models/
 │       ├── bestdown.pt            # YOLOv8: поза коровы (лежит/стоит)
 │       └── coweat.pt              # YOLOv8: ест/пьёт
 │
-├── external_bcs/                  # Модуль оценки упитанности (БКС) с распознаванием ID
+├── external_bcs/                  # Модуль оценки упитанности (БКС/КВС)
 │   ├── bcs_analysis.py            # Детекция, ID по бирке, BCS, видео, запись в БД
-│   ├── requirements.txt
 │   └── models/
-│       ├── best_number_classifier.pt  # YOLO: распознавание номера бирки (1–4)
+│       ├── best_number_classifier.pt  # YOLO: распознавание номера бирки
 │       ├── bcs_regressor.pth      # Регрессор БКС
 │       └── scaler.pkl             # Нормализатор признаков
-│   # Детектор коровы: external_activity/models/cow_eat.pt
 │
 ├── ui/                            # Интерфейс PyQt6
-│   ├── main_window.py             # Главное окно
-│   ├── styles.py                  # Стили QSS
-│   ├── notifications.py           # Уведомления
+│   ├── main_window.py             # Главное окно + переключение тем
+│   ├── styles.py                  # Стили QSS (тёмная и светлая тема)
+│   ├── notifications.py           # Диалог авторизации и уведомления
 │   ├── reports_dialog.py          # Диалог отчётов
-│   ├── bcs_window.py              # Окно БКС
+│   ├── bcs_window.py              # Окно расчёта БКС/КВС
+│   ├── camera_widgets.py          # Виджеты камер
 │   └── pages/
-│       ├── page_cameras.py        # Страница камер
-│       ├── page_monitoring.py     # Мониторинг
-│       ├── page_database.py       # База данных
-│       ├── page_notifications.py  # Уведомления
-│       └── page_enterprise.py     # Предприятие
+│       ├── page_monitoring.py     # Мониторинг (главная)
+│       ├── page_cameras.py        # Мультивью камер
+│       ├── page_database.py       # SQL-консоль
+│       ├── page_notifications.py  # Архив событий
+│       └── page_enterprise.py     # Реестр сотрудников
 │
 ├── vision/                        # Воркеры видеообработки
 │   ├── worker.py                  # Основной воркер (активность)
-│   └── sleep_worker.py            # Воркер для анализа сна
+│   └── sleep_worker.py            # Воркер анализа сна
 │
 ├── reports/                       # Генерация отчётов
 │   ├── excel_report.py
 │   └── pdf_report.py
 │
-├── snapshots/                     # Снимки с камер (авто)
-├── feedframes/                    # Кадры из видео (авто)
+├── snapshots/                     # Снимки с камер (авто, не коммитить)
+├── feed_frames/                   # Кадры из видео (авто, не коммитить)
+├── sleep_frames/                  # Кадры сна (авто, не коммитить)
 │
 ├── requirements.txt
-└── .env                           # Не коммитить!
+├── .env                           # Не коммитить!
+├── run.bat                        # Запуск на Windows
+└── run.ps1                        # Запуск через PowerShell
 ```
 
 ---
 
 ## Модули
 
-### 🍽️ Активность (`external_activity`)
-Анализирует видео и определяет, ест или пьёт корова. Результаты пишутся в таблицы `sessions` и `frames`.
+### 📺 Мониторинг
+Главная страница с карточками статистики (коров в базе, событий, тревог), видеозоной и тремя независимыми алгоритмами анализа.
 
-### 📊 БКС (`external_bcs`)
-Оценивает упитанность коровы по шкале 1–5 с **распознаванием ID по бирке** (YOLO-классификатор номера).
-Поддерживает фото и видео. Результаты — в `bcs_sessions` и `bcs_measurements` (поля `recognized_tag`, `frame_number`, `video_path`).
+### 🍽️ Детекция активности
+Анализирует видеопоток и определяет, ест или пьёт корова. Результаты записываются в БД и отображаются в журнале.
+
+### 🌙 Детекция сна
+Определяет, лежит или стоит корова, фиксирует периоды сна и отдыха.
+
+### 📊 Расчёт БКС/КВС
+Оценивает упитанность коровы по шкале 1–5 с распознаванием ID по бирке.  
+Поддерживает фото и видео. Результаты сохраняются в БД.
 
 ---
 
 ## База данных
 
-PostgreSQL. Таблицы создаются автоматически при первом запуске через `database/initdb.py`.
+PostgreSQL. Таблицы создаются автоматически при первом запуске.
 
 | Таблица | Описание |
 |---|---|
 | `cows` | Коровы |
 | `cameras` | Камеры |
-| `sessions` | Сессии активности (ест/пьёт) |
-| `frames` | Кадры активности |
+| `employees` | Сотрудники |
+| `sessions` | Сессии активности |
 | `sleep_sessions` | Сессии сна |
-| `sleep_frames` | Кадры сна |
 | `bcs_sessions` | Сессии оценки БКС |
 | `bcs_measurements` | Измерения БКС |
-| `notifications` | Уведомления |
-| `ai_activities` | Лог всех ИИ-событий |
+| `notifications` | Уведомления и тревоги |
 
 ---
 
-## Стек
+## Темы интерфейса
 
-- **Python 3.11+**
-- **PyQt6** — интерфейс
-- **SQLAlchemy + psycopg2** — БД
-- **Ultralytics YOLOv8** — детекция
-- **OpenCV** — обработка видео
-- **ReportLab / openpyxl** — отчёты
+Приложение поддерживает две темы, переключаемые кнопкой в сайдбаре:
+- 🌙 **Тёмная тема** — Tokyo Night
+- ☀️ **Светлая тема** — Clean Light
+
+---
+
+## Стек технологий
+
+| Компонент | Технология |
+|---|---|
+| Интерфейс | PyQt6 |
+| База данных | PostgreSQL + SQLAlchemy + psycopg2 |
+| AI-детекция | Ultralytics YOLOv8 |
+| Видеообработка | OpenCV |
+| Отчёты | ReportLab, openpyxl |
+| Python | 3.11+ |

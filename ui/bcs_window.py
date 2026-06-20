@@ -123,7 +123,7 @@ class BcsWindow(QDialog):
 
     def __init__(self, parent=None, dark: bool = True):
         super().__init__(parent)
-        self.setWindowTitle("Расчёт БКС / КВС")
+        self.setWindowTitle("Расчёт BCS")
         self.setMinimumSize(1000, 680)
         self.setModal(True)
 
@@ -297,7 +297,7 @@ class BcsWindow(QDialog):
         root.setContentsMargins(12, 12, 12, 12)
         root.setSpacing(8)
 
-        self.lbl_title = QLabel("Анализ упитанности (БКС / КВС)")
+        self.lbl_title = QLabel("Анализ упитанности (BCS)")
         self.lbl_title.setFont(QFont("Segoe UI", 15, QFont.Weight.Bold))
         root.addWidget(self.lbl_title)
 

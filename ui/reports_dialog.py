@@ -25,14 +25,14 @@ class ReportWorker(QThread):
         try:
             from database.reports_db import (
                 fetch_notifications, fetch_activity_stats, fetch_cow_summary)
+            activity = fetch_activity_stats(self.conn_params, self.days)
+            cows = fetch_cow_summary(self.conn_params)
             if self.report_type == "excel":
                 from reports.excel_report import generate_excel_report
-                data = fetch_notifications(self.conn_params, self.days)
-                generate_excel_report(data, self.save_path, self.company_name)
+                generate_excel_report(activity, cows, self.save_path,
+                                      self.company_name, self.days)
             else:
                 from reports.pdf_report import generate_pdf_report
-                activity = fetch_activity_stats(self.conn_params, self.days)
-                cows     = fetch_cow_summary(self.conn_params)
                 generate_pdf_report(activity, cows, self.save_path,
                                     self.company_name, self.days)
             self.finished.emit(self.save_path)

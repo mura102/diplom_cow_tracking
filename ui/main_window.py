@@ -91,7 +91,7 @@ class MainWindow(QMainWindow):
         self.load_notifications_data()
 
         # Заполняем комбобокс камер при старте
-        self.refresh_cameras_combo()
+        #self.refresh_cameras_combo()
 
     # ═══════════════════════════════════════════════════════════════════
     # ПОСТРОЕНИЕ UI
@@ -203,14 +203,18 @@ class MainWindow(QMainWindow):
         if self.user_role == "vet":
             tools_menu.setEnabled(False)
 
+
         test_menu = mb.addMenu("Тестирование")
         test_menu.addAction(QAction(
             "Тест: Предупреждение (Желтый)", self,
-            triggered=lambda: self.trigger_alert("C-12", "WARNING", "Низкая активность объекта.")))
+            triggered=lambda: self.trigger_alert("C-12", "WARNING", "Низкая продолжительность питания.")))
         test_menu.addAction(QAction(
             "Тест: Критическое (Красный)", self,
-            triggered=lambda: self.trigger_alert("A-01", "CRITICAL", "Обнаружено падение животного!")))
-
+            triggered=lambda: self.trigger_alert("A-01", "CRITICAL", "Отказ от воды в течение длительного времени.")))
+        test_menu.addSeparator()
+        test_menu.addAction(QAction(
+            "Суточный отчёт (проверка аномалий)", self,
+            triggered=self.run_daily_report))
         help_menu = mb.addMenu("Справка")
         help_menu.addAction(QAction("О программе", self, triggered=self.show_about_info))
 
@@ -953,9 +957,9 @@ class MainWindow(QMainWindow):
                     if isinstance(message, bytes):
                         message = message.decode("cp1251", errors="replace")
 
-                    notif_id = str(n.id_notification) if n.id_notification else ""
+                    cow_number_str = str(n.cow.cow_number) if n.cow and n.cow.cow_number else "—"
                     items = [
-                        QTableWidgetItem(notif_id),
+                    QTableWidgetItem(cow_number_str),
                         QTableWidgetItem(time_str),
                         QTableWidgetItem(level_str),
                         QTableWidgetItem(cow_tag),
@@ -1048,6 +1052,54 @@ class MainWindow(QMainWindow):
             self.update_log("pg_dump не найден. Убедитесь что PostgreSQL в PATH.")
         except Exception as e:
             self.update_log(f"Ошибка создания бэкапа: {e}")
+
+    def run_daily_report(self):
+        try:
+            import datetime as dt
+            from external_activity.reporting import generate_daily_report, save_daily_report
+
+            cow_number = self._get_default_cow_number()
+            today = dt.date.today()
+
+            has_anomalies, alerts, stats = generate_daily_report(cow_number, today)
+            save_daily_report(cow_number, today, stats, alerts)
+
+            lines = [
+                f"Суточный отчёт за {today.strftime('%d.%m.%Y')} (корова №{cow_number})",
+                "",
+                f"Кормление: {stats.get('feed_minutes', 0):.1f} мин",
+                f"Питьё: {stats.get('drink_minutes', 0):.1f} мин",
+                f"Лежание: {stats.get('lying_minutes', 0):.1f} мин",
+                f"Стояние (ночь): {stats.get('standing_minutes', 0):.1f} мин",
+                "",
+            ]
+            if has_anomalies:
+                lines.append("⚠ ОБНАРУЖЕНЫ АНОМАЛИИ:")
+                lines.extend(f"  • {a}" for a in alerts)
+            else:
+                lines.append("Все показатели в норме.")
+
+            self.update_log(f"Суточный отчёт сформирован для коровы №{cow_number}.")
+
+            from PyQt6.QtWidgets import QTextEdit
+            dlg = QDialog(self)
+            dlg.setWindowTitle("Суточный отчёт")
+            dlg.setMinimumSize(420, 320)
+            lay = QVBoxLayout(dlg)
+            lay.addWidget(QLabel("📋 Результат суточной проверки"))
+            te = QTextEdit()
+            te.setReadOnly(True)
+            te.setPlainText("\n".join(lines))
+            lay.addWidget(te)
+            btn = QPushButton("Закрыть")
+            btn.clicked.connect(dlg.accept)
+            lay.addWidget(btn)
+            dlg.exec()
+
+        except Exception as e:
+            import traceback
+            self.update_log(f"❌ Ошибка суточного отчёта: {e}")
+            QMessageBox.critical(self, "Ошибка", f"{type(e).__name__}: {e}\n\n{traceback.format_exc()}")
     # ═══════════════════════════════════════════════════════════════════
     # АЛЕРТЫ
     # ═══════════════════════════════════════════════════════════════════

@@ -330,3 +330,18 @@ class SleepCowResult(Base):
     cow_number     = Column(Integer, ForeignKey("cows.cow_number"), nullable=True)
     lying_sec      = Column(Float, nullable=False, default=0.0)
     standing_sec   = Column(Float, nullable=False, default=0.0)
+
+
+class DailyReport(Base):
+    __tablename__ = "daily_reports"
+
+    id               = Column(Integer, primary_key=True, autoincrement=True)
+    cow_number       = Column(Integer, ForeignKey("cows.cow_number"), nullable=False)
+    report_date      = Column(Date, nullable=False)
+    feed_minutes     = Column(Float)
+    drink_minutes    = Column(Float)
+    lying_minutes    = Column(Float)
+    standing_minutes = Column(Float)
+    has_anomalies    = Column(Boolean, default=False)
+    alerts_text      = Column(String)
+    created_at       = Column(DateTime, default=datetime.utcnow)

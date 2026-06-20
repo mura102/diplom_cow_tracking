@@ -185,8 +185,10 @@ class MainWindow(QMainWindow):
         db_menu = mb.addMenu("База данных")
         db_menu.addAction(QAction("Обновить данные", self, triggered=self.refresh_db_stats))
         db_menu.addSeparator()
-        db_menu.addAction(QAction("Параметры соединения", self))
-
+        #db_menu.addAction(QAction("Параметры соединения", self))
+        a_backup = QAction("Резервная копия БД", self)
+        a_backup.triggered.connect(self.create_db_backup)
+        db_menu.addAction(a_backup)
         rep_menu = mb.addMenu("Отчеты")
         a_excel = QAction("Экспорт уведомлений (Excel)", self)
         a_excel.triggered.connect(self._open_excel_report_dialog)
@@ -951,7 +953,9 @@ class MainWindow(QMainWindow):
                     if isinstance(message, bytes):
                         message = message.decode("cp1251", errors="replace")
 
+                    notif_id = str(n.id_notification) if n.id_notification else ""
                     items = [
+                        QTableWidgetItem(notif_id),
                         QTableWidgetItem(time_str),
                         QTableWidgetItem(level_str),
                         QTableWidgetItem(cow_tag),
@@ -1010,27 +1014,96 @@ class MainWindow(QMainWindow):
         except Exception as e:
             self.update_log(f"SQL Error: {e}")
 
+    def create_db_backup(self):
+        import subprocess
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Сохранить резервную копию",
+            f"backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.sql",
+            "SQL Files (*.sql)"
+        )
+        if not path:
+            return
+        try:
+            env = os.environ.copy()
+            env["PGPASSWORD"] = self._conn_params.get("password", "")
+            result = subprocess.run(
+                [
+                    r"C:\Program Files\PostgreSQL\16\bin\pg_dump",
+                    "-h", self._conn_params.get("host", "localhost"),
+                    "-p", str(self._conn_params.get("port", 5432)),
+                    "-U", self._conn_params.get("user", "postgres"),
+                    "-d", self._conn_params.get("dbname", "cow_tracking_db"),
+                    "-f", path,
+                ],
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode == 0:
+                self.update_log(f"Резервная копия сохранена: {path}")
+                InfoAlert(self, "РЕЗЕРВНАЯ КОПИЯ", f"Файл успешно сохранён:\n{path}").exec()
+            else:
+                self.update_log(f"Ошибка pg_dump: {result.stderr}")
+        except FileNotFoundError:
+            self.update_log("pg_dump не найден. Убедитесь что PostgreSQL в PATH.")
+        except Exception as e:
+            self.update_log(f"Ошибка создания бэкапа: {e}")
     # ═══════════════════════════════════════════════════════════════════
     # АЛЕРТЫ
     # ═══════════════════════════════════════════════════════════════════
 
     def trigger_alert(self, cow_tag: str, level: str, msg: str):
         from PyQt6.QtWidgets import QLabel, QTableWidgetItem
-        now_dt  = datetime.now()
+        import random
+
+        now_dt = datetime.now()
         now_str = now_dt.strftime("%H:%M:%S")
+
+        # Данные животного и ветеринара из БД
+        vet_info = ""
+        cow_display = f"Объект {cow_tag}"
+
+        if DB_AVAILABLE:
+            try:
+                db = SessionLocal()
+
+                # Берём случайную корову из БД
+                cows = db.query(Cow).all()
+                if cows:
+                    random_cow = random.choice(cows)
+                    cow_id = random_cow.cow_number or random_cow.tag_number
+                    cow_display = f"Объект id={cow_id} ({random_cow.tag_number})"
+
+                # Берём случайного сотрудника как ветеринара
+                employees = db.query(Employee).all()
+                if employees:
+                    vet = random.choice(employees)
+                    vet_info = (
+                        f"\n\nСообщение отправлено: {vet.full_name}"
+                        f"\nEmail: {vet.email or 'не указан'}"
+                        f"\nТел.: {vet.phone or 'не указан'}"
+                    )
+
+                db.close()
+            except Exception:
+                pass
+
+        alert_text = f"{cow_display}: {msg}{vet_info}"
+
         if level == "CRITICAL":
-            CriticalAlert(self, "УГРОЗА ЗДОРОВЬЮ", f"Объект {cow_tag}: {msg}").exec()
+            CriticalAlert(self, "УГРОЗА ЗДОРОВЬЮ", alert_text).exec()
             self.update_log(f"[{now_str}] КРИТИЧНО [{cow_tag}]: {msg}")
         else:
-            WarningAlert(self, "ПРЕДУПРЕЖДЕНИЕ", f"Объект {cow_tag}: {msg}").exec()
+            WarningAlert(self, "ПРЕДУПРЕЖДЕНИЕ", alert_text).exec()
             self.update_log(f"[{now_str}] ВНИМАНИЕ [{cow_tag}]: {msg}")
 
         if DB_AVAILABLE:
             try:
                 db = SessionLocal()
-                cow = db.query(Cow).filter_by(tag_number=cow_tag).first()
+                cows_all = db.query(Cow).all()
+                random_cow = random.choice(cows_all) if cows_all else None
                 notif = Notification(
-                    id_cow=cow.id_cow if cow else None,
+                    id_cow=random_cow.id_cow if random_cow else None,
                     alert_type="MANUAL",
                     severity=level,
                     triggered_at=now_dt,
@@ -1047,6 +1120,7 @@ class MainWindow(QMainWindow):
             row = 0
             self.notif_table.insertRow(row)
             items = [
+                QTableWidgetItem("—"),
                 QTableWidgetItem(now_str),
                 QTableWidgetItem("🚨 КРИТИЧЕСКОЕ" if level == "CRITICAL" else "⚠️ ПРЕДУПРЕЖДЕНИЕ"),
                 QTableWidgetItem(str(cow_tag)),

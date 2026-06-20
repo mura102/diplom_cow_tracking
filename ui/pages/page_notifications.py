@@ -21,10 +21,10 @@ def build(mw) -> QWidget:
     layout.addWidget(title)
 
     mw.notif_table = QTableWidget()
-    mw.notif_table.setColumnCount(4)
-    mw.notif_table.setHorizontalHeaderLabels(["Время", "Тип", "Объект", "Сообщение"])
+    mw.notif_table.setColumnCount(5)
+    mw.notif_table.setHorizontalHeaderLabels(["ID", "Время", "Тип", "Секция", "Сообщение"])
     mw.notif_table.horizontalHeader().setSectionResizeMode(
-        3, QHeaderView.ResizeMode.Stretch)
+        4, QHeaderView.ResizeMode.Stretch)
     mw.notif_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
     mw.notif_table.setAlternatingRowColors(True)
     layout.addWidget(mw.notif_table, stretch=1)

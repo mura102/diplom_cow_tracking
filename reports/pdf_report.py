@@ -142,7 +142,7 @@ def generate_pdf_report(
     story.append(Paragraph("1. Сводка по стаду", styles["section"]))
 
     if cow_summary:
-        headers = ["Метка", "Порода", "Вес, кг", "Статус", "Последний осмотр", "Событий"]
+        headers = ["ID", "Порода", "Вес, кг", "Статус", "Последний осмотр", "Событий"]
         col_w = [
             usable_width * 0.12,
             usable_width * 0.22,
@@ -158,7 +158,7 @@ def generate_pdf_report(
             weight = cow.get("weight_kg")
             weight_str = f"{weight:.0f}" if isinstance(weight, (int, float)) else "—"
             data.append([
-                str(cow.get("tag_number", "—")),
+                str(cow.get("cow_number", "—")),
                 str(cow.get("breed", "—")),
                 weight_str,
                 str(cow.get("status", "—")),
@@ -173,28 +173,30 @@ def generate_pdf_report(
     story.append(Paragraph("2. Детальная статистика активности", styles["section"]))
 
     if activity_stats:
-        headers = ["Метка коровы", "Дата", "Уровень", "Количество событий"]
+        headers = ["ID", "Дата", "Тип активности", "Кол-во событий"]
         col_w = [
             usable_width * 0.20,
             usable_width * 0.20,
-            usable_width * 0.30,
-            usable_width * 0.30,
+            usable_width * 0.35,
+            usable_width * 0.25,
         ]
         data = [headers]
-        level_map = {
-            "CRITICAL": "Критическое",
-            "WARNING": "Предупреждение",
-            "INFO": "Информация",
+        type_map = {
+            "FEED": "Кормление",
+            "DRINK": "Водопой",
+            "SLEEP": "Сон/Отдых",
+            "FALL": "Падение",
+            "BCS": "Оценка BCS",
         }
         for row in activity_stats:
             d = row.get("date")
             d_str = d.strftime("%d.%m.%Y") if hasattr(d, "strftime") else (str(d) if d else "—")
-            level_raw = str(row.get("event_type", "—"))
-            level_str = level_map.get(level_raw.upper(), level_raw)
+            type_raw = str(row.get("event_type", "—"))
+            type_str = type_map.get(type_raw.upper(), type_raw)
             data.append([
                 str(row.get("cow_tag", "—")),
                 d_str,
-                level_str,
+                type_str,
                 str(row.get("event_count", 0)),
             ])
         story.append(_make_table(data, col_w, font_name))

@@ -1,4 +1,3 @@
-# ui/reports_dialog.py
 import os
 from datetime import datetime
 from PyQt6.QtWidgets import (
@@ -11,30 +10,40 @@ from PyQt6.QtCore import QThread, pyqtSignal
 
 class ReportWorker(QThread):
     finished = pyqtSignal(str)
-    error    = pyqtSignal(str)
+    error = pyqtSignal(str)
 
     def __init__(self, report_type, save_path, conn_params, days, company_name):
         super().__init__()
-        self.report_type  = report_type
-        self.save_path    = save_path
-        self.conn_params  = conn_params
-        self.days         = days
+        self.report_type = report_type
+        self.save_path = save_path
+        self.conn_params = conn_params
+        self.days = days
         self.company_name = company_name
 
     def run(self):
         try:
             from database.reports_db import (
                 fetch_notifications, fetch_activity_stats, fetch_cow_summary)
-            activity = fetch_activity_stats(self.conn_params, self.days)
-            cows = fetch_cow_summary(self.conn_params)
-            if self.report_type == "excel":
-                from reports.excel_report import generate_excel_report
-                generate_excel_report(activity, cows, self.save_path,
-                                      self.company_name, self.days)
+
+            if self.report_type == "events_excel":
+                # Загружаем архив событий (уведомлений)
+                events = fetch_notifications(self.conn_params, self.days)
+                # ИСПРАВЛЕНО: импортируем из нового файла events_excel_report
+                from reports.events_excel_report import generate_events_excel_report
+                generate_events_excel_report(events, self.save_path, self.company_name, self.days)
             else:
-                from reports.pdf_report import generate_pdf_report
-                generate_pdf_report(activity, cows, self.save_path,
-                                    self.company_name, self.days)
+                # Загружаем статистику активности
+                activity = fetch_activity_stats(self.conn_params, self.days)
+                cows = fetch_cow_summary(self.conn_params)
+
+                if self.report_type == "excel":
+                    from reports.excel_report import generate_excel_report
+                    generate_excel_report(activity, cows, self.save_path,
+                                          self.company_name, self.days)
+                elif self.report_type == "pdf":
+                    from reports.pdf_report import generate_pdf_report
+                    generate_pdf_report(activity, cows, self.save_path,
+                                        self.company_name, self.days)
             self.finished.emit(self.save_path)
         except Exception as e:
             self.error.emit(str(e))
@@ -122,17 +131,33 @@ class BaseReportDialog(QDialog):
     def __init__(self, parent=None, report_type="excel",
                  conn_params=None, company_name="Рога и Копыта"):
         super().__init__(parent)
-        self.report_type  = report_type
-        self.conn_params  = conn_params or {}
+        self.report_type = report_type
+        self.conn_params = conn_params or {}
         self.company_name = company_name
-        self.worker       = None
+        self.worker = None
         self.setStyleSheet(self._DIALOG_STYLE)
         self._setup_ui()
 
     def _setup_ui(self):
-        is_excel = self.report_type == "excel"
-        self.setWindowTitle(
-            "Экспорт уведомлений (Excel)" if is_excel else "Статистика активности (PDF)")
+        is_excel = self.report_type in ("excel", "events_excel")
+
+        if self.report_type == "events_excel":
+            win_title = "Экспорт событий (Excel)"
+            lbl_text = "📋 Экспорт архива событий"
+            default_name_prefix = "report_events"
+            default_days = 30
+        elif self.report_type == "excel":
+            win_title = "Статистика активности (Excel)"
+            lbl_text = "📈 Статистика активности (Excel)"
+            default_name_prefix = "report_activity"
+            default_days = 30
+        else:
+            win_title = "Статистика активности (PDF)"
+            lbl_text = "📈 Статистика активности (PDF)"
+            default_name_prefix = "report_activity"
+            default_days = 7
+
+        self.setWindowTitle(win_title)
         self.setMinimumWidth(460)
         self.setModal(True)
 
@@ -141,8 +166,7 @@ class BaseReportDialog(QDialog):
         layout.setContentsMargins(16, 16, 16, 16)
 
         # Заголовок
-        title_lbl = QLabel(
-            "📊 Экспорт уведомлений" if is_excel else "📈 Статистика активности")
+        title_lbl = QLabel(lbl_text)
         title_lbl.setStyleSheet(
             "font-size: 15px; font-weight: bold; color: #1e3a5f; border: none;")
         layout.addWidget(title_lbl)
@@ -153,7 +177,7 @@ class BaseReportDialog(QDialog):
         period_layout.addWidget(QLabel("За последние"))
         self.days_spin = QSpinBox()
         self.days_spin.setRange(1, 365)
-        self.days_spin.setValue(30 if is_excel else 7)
+        self.days_spin.setValue(default_days)
         self.days_spin.setSuffix(" дн.")
         self.days_spin.setFixedWidth(90)
         period_layout.addWidget(self.days_spin)
@@ -164,11 +188,9 @@ class BaseReportDialog(QDialog):
         path_group = QGroupBox("Путь сохранения")
         path_layout = QHBoxLayout(path_group)
         ext = "xlsx" if is_excel else "pdf"
-        ts  = datetime.now().strftime('%Y%m%d_%H%M')
-        default_name = (
-            f"report_notifications_{ts}.{ext}" if is_excel
-            else f"report_activity_{ts}.{ext}"
-        )
+        ts = datetime.now().strftime('%Y%m%d_%H%M')
+        default_name = f"{default_name_prefix}_{ts}.{ext}"
+
         default_path = os.path.join(os.path.expanduser("~"), "Documents", default_name)
         self.path_label = QLabel(default_path)
         self.path_label.setWordWrap(True)
@@ -198,7 +220,7 @@ class BaseReportDialog(QDialog):
         self.gen_btn.clicked.connect(self._generate)
 
         cancel_btn = QPushButton("Отмена")
-        cancel_btn.setObjectName("CancelBtn")   # ← ключевое: именованный стиль
+        cancel_btn.setObjectName("CancelBtn")  # ← ключевое: именованный стиль
         cancel_btn.clicked.connect(self.reject)
 
         btn_layout.addStretch()
@@ -207,7 +229,7 @@ class BaseReportDialog(QDialog):
         layout.addLayout(btn_layout)
 
     def _browse_path(self):
-        ext     = "xlsx" if self.report_type == "excel" else "pdf"
+        ext = "xlsx" if self.report_type in ("excel", "events_excel") else "pdf"
         filter_ = "Excel файлы (*.xlsx)" if ext == "xlsx" else "PDF файлы (*.pdf)"
         path, _ = QFileDialog.getSaveFileName(
             self, "Сохранить отчёт", self.path_label.text(), filter_)

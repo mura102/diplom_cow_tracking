@@ -6,7 +6,7 @@ ui/pages/page_monitoring.py
   [🏃 Детекция активности] [🌙 Детекция сна] [📊 Расчет КВС]
    log_box                  sleep_log_box     kvs_log_box
 
-alert_box убран — тревоги на этой странице больше не отображаются.
+Дашборды (статистика сверху) убраны для расширения зоны плеера.
 """
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
@@ -20,11 +20,10 @@ from PyQt6.QtMultimediaWidgets import QVideoWidget
 def build(mw) -> QWidget:
     """
     Добавляет атрибуты:
-      card_cows, card_events, card_alerts,
       video_stack, label_placeholder, label_ai_stream, video_widget,
       combo_mode, btn_play_pause, btn_stop, slider,
-      combo_camera_activity,          ← НОВЫЙ: выбор камеры для анализа активности
-      btn_refresh_cameras,            ← НОВЫЙ: обновить список камер из БД
+      combo_camera_activity,          ← выбор камеры для анализа активности
+      btn_refresh_cameras,            ← обновить список камер из БД
       btn_detect_activity, btn_detect_sleep, btn_calc_kvs,
       log_box, sleep_log_box, kvs_log_box
     """
@@ -33,20 +32,10 @@ def build(mw) -> QWidget:
     layout.setContentsMargins(20, 20, 20, 20)
     layout.setSpacing(14)
 
-    # ── Карточки статистики ───────────────────────────────────────────
-    stats_layout = QHBoxLayout()
-    stats_layout.setSpacing(16)
-    mw.card_cows   = _stat_card("🐄 КОРОВ В БАЗЕ", "?")
-    mw.card_events = _stat_card("📊 СОБЫТИЙ",      "0")
-    mw.card_alerts = _stat_card("⚠️ ТРЕВОГИ",      "0", is_alert=True)
-    for card in [mw.card_cows, mw.card_events, mw.card_alerts]:
-        stats_layout.addWidget(card)
-    layout.addLayout(stats_layout)
-
     # ── Видео-зона ────────────────────────────────────────────────────
     mw.video_stack = QStackedWidget()
     mw.video_stack.setMinimumHeight(220)
-    mw.video_stack.setMaximumHeight(520)
+    # Убрали setMaximumHeight, чтобы видеоплеер занимал всё доступное место
     mw.video_stack.setSizePolicy(
         QSizePolicy.Policy.Expanding,
         QSizePolicy.Policy.Expanding,
@@ -66,7 +55,8 @@ def build(mw) -> QWidget:
     mw.video_widget.setObjectName("VideoPlayer")
     mw.video_stack.addWidget(mw.video_widget)
 
-    layout.addWidget(mw.video_stack, stretch=4)
+    # Увеличили stretch для плеера, чтобы он забирал максимум места
+    layout.addWidget(mw.video_stack, stretch=5)
 
     # ── Панель управления (режим + плеер) ─────────────────────────────
     controls = QHBoxLayout()
@@ -197,7 +187,9 @@ def build(mw) -> QWidget:
     algos.addLayout(col_activity, stretch=1)
     algos.addLayout(col_sleep,    stretch=1)
     algos.addLayout(col_kvs,      stretch=1)
-    layout.addLayout(algos, stretch=3)
+
+    # Немного уменьшили растяжение нижней панели, чтобы отдать место плееру
+    layout.addLayout(algos, stretch=2)
 
     # alert_box — заглушка (main_window.py обращается к нему в trigger_alert)
     mw.alert_box = QTextEdit()
@@ -205,22 +197,3 @@ def build(mw) -> QWidget:
 
     mw.update_algorithm_buttons_style()
     return page
-
-
-def _stat_card(title: str, value: str, is_alert: bool = False) -> QFrame:
-    card = QFrame()
-    card.setObjectName("StatCard")
-    card.setMinimumHeight(100)
-    card.setMaximumHeight(150)
-    card_layout = QVBoxLayout(card)
-    card_layout.setContentsMargins(20, 16, 20, 16)
-    card_layout.setSpacing(8)
-    lbl_title = QLabel(title)
-    lbl_title.setObjectName("StatTitle")
-    lbl_val = QLabel(value)
-    lbl_val.setObjectName("ValLabelAlert" if is_alert else "ValLabel")
-    lbl_val.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-    card_layout.addWidget(lbl_title)
-    card_layout.addWidget(lbl_val)
-    card_layout.addStretch()
-    return card

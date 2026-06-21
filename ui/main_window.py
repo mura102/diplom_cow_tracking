@@ -185,14 +185,19 @@ class MainWindow(QMainWindow):
         db_menu = mb.addMenu("База данных")
         db_menu.addAction(QAction("Обновить данные", self, triggered=self.refresh_db_stats))
         db_menu.addSeparator()
-        #db_menu.addAction(QAction("Параметры соединения", self))
         a_backup = QAction("Резервная копия БД", self)
         a_backup.triggered.connect(self.create_db_backup)
         db_menu.addAction(a_backup)
         rep_menu = mb.addMenu("Отчеты")
-        a_excel = QAction("Экспорт уведомлений (Excel)", self)
+
+        a_excel_events = QAction("Экспорт событий (Excel)", self)
+        a_excel_events.triggered.connect(self._open_events_report_dialog)
+        rep_menu.addAction(a_excel_events)
+
+        a_excel = QAction("Статистика активности (Excel)", self)
         a_excel.triggered.connect(self._open_excel_report_dialog)
         rep_menu.addAction(a_excel)
+
         a_pdf = QAction("Статистика активности (PDF)", self)
         a_pdf.triggered.connect(self._open_pdf_report_dialog)
         rep_menu.addAction(a_pdf)
@@ -203,18 +208,17 @@ class MainWindow(QMainWindow):
         if self.user_role == "vet":
             tools_menu.setEnabled(False)
 
-
         test_menu = mb.addMenu("Тестирование")
         test_menu.addAction(QAction(
             "Тест: Предупреждение (Желтый)", self,
-            triggered=lambda: self.trigger_alert("C-12", "WARNING", "Низкая продолжительность питания.")))
+            triggered=lambda: self.trigger_alert("А-03", "WARNING",
+                                                 "\nНомер 1: Питание слишком короткое - 6 сек (норма >10 сек),\nНомер 2: Питание слишком короткое - 6 сек (норма >10 сек),\nНомер 3: Питание слишком короткое - 6 сек (норма >10 сек).")))
         test_menu.addAction(QAction(
             "Тест: Критическое (Красный)", self,
-            triggered=lambda: self.trigger_alert("A-01", "CRITICAL", "Отказ от воды в течение длительного времени.")))
+            triggered=lambda: self.trigger_alert("Б-02", "CRITICAL",
+                                                 "Номер 1: Низкий показатель BCS - 2.7 балла (норма 3.0–3.5)")))
         test_menu.addSeparator()
-        test_menu.addAction(QAction(
-            "Суточный отчёт (проверка аномалий)", self,
-            triggered=self.run_daily_report))
+
         help_menu = mb.addMenu("Справка")
         help_menu.addAction(QAction("О программе", self, triggered=self.show_about_info))
 
@@ -717,7 +721,7 @@ class MainWindow(QMainWindow):
         self.btn_calc_kvs.setEnabled(False)
         self.btn_calc_kvs.setChecked(False)
         window = BcsWindow(parent=self, dark = self.is_dark_theme)
-        
+
         window.exec()
         self.btn_calc_kvs.setEnabled(True)
         self.btn_calc_kvs.setChecked(False)
@@ -920,6 +924,7 @@ class MainWindow(QMainWindow):
             self.camera_layout.setColumnStretch(c, 1)
         for r in range(rows):
             self.camera_layout.setRowStretch(r, 1)
+
     # ═══════════════════════════════════════════════════════════════════
     # БАЗА ДАННЫХ
     # ═══════════════════════════════════════════════════════════════════
@@ -930,13 +935,17 @@ class MainWindow(QMainWindow):
         db = SessionLocal()
         try:
             cow_count = db.scalar(select(func.count()).select_from(Cow))
-            lbl = self.card_cows.findChild(QLabel, "ValLabel")
-            if lbl:
-                lbl.setText(str(cow_count))
+            # Безопасно пытаемся обновить лейбл, только если виджет существует
+            if hasattr(self, 'card_cows'):
+                lbl = self.card_cows.findChild(QLabel, "ValLabel")
+                if lbl:
+                    lbl.setText(str(cow_count))
+
             notif_count = db.scalar(select(func.count()).select_from(Notification))
-            lbl_ev = self.card_events.findChild(QLabel, "ValLabel")
-            if lbl_ev:
-                lbl_ev.setText(str(notif_count))
+            if hasattr(self, 'card_events'):
+                lbl_ev = self.card_events.findChild(QLabel, "ValLabel")
+                if lbl_ev:
+                    lbl_ev.setText(str(notif_count))
         except Exception as e:
             self.update_log(f"Ошибка обновления статистики: {e}")
         finally:
@@ -1009,6 +1018,10 @@ class MainWindow(QMainWindow):
             return
         q = self.sql_input.toPlainText().strip()
         if not q:
+            if hasattr(self, 'lbl_sql_status'):
+                self.lbl_sql_status.setText("⚠️ Введите SQL запрос.")
+                self.lbl_sql_status.setStyleSheet(
+                    f"color: {'#e0af68' if self.is_dark_theme else '#d97706'}; font-size: 14px; font-weight: bold; border: none;")
             return
         try:
             from PyQt6.QtWidgets import QTableWidgetItem
@@ -1023,12 +1036,30 @@ class MainWindow(QMainWindow):
                 for r_i, r_data in enumerate(rows):
                     for c_i, val in enumerate(r_data):
                         self.db_table.setItem(r_i, c_i, QTableWidgetItem(str(val)))
+
+                # УСПЕХ SELECT
+                if hasattr(self, 'lbl_sql_status'):
+                    self.lbl_sql_status.setText(f"✅ Успешно! Найдено строк: {len(rows)}")
+                    self.lbl_sql_status.setStyleSheet(
+                        f"color: {'#9ece6a' if self.is_dark_theme else '#16a34a'}; font-size: 14px; font-weight: bold; border: none;")
             else:
                 db.commit()
                 self.update_log("Запрос выполнен успешно.")
+
+                # УСПЕХ INSERT/UPDATE/DELETE
+                if hasattr(self, 'lbl_sql_status'):
+                    self.lbl_sql_status.setText("✅ Запрос успешно выполнен.")
+                    self.lbl_sql_status.setStyleSheet(
+                        f"color: {'#9ece6a' if self.is_dark_theme else '#16a34a'}; font-size: 14px; font-weight: bold; border: none;")
             db.close()
         except Exception as e:
             self.update_log(f"SQL Error: {e}")
+
+            # ОШИБКА
+            if hasattr(self, 'lbl_sql_status'):
+                self.lbl_sql_status.setText(f"❌ Ошибка: {str(e)}")
+                self.lbl_sql_status.setStyleSheet(
+                    f"color: {'#f7768e' if self.is_dark_theme else '#dc2626'}; font-size: 14px; font-weight: bold; border: none;")
 
     def create_db_backup(self):
         import subprocess
@@ -1112,6 +1143,7 @@ class MainWindow(QMainWindow):
             import traceback
             self.update_log(f"❌ Ошибка суточного отчёта: {e}")
             QMessageBox.critical(self, "Ошибка", f"{type(e).__name__}: {e}\n\n{traceback.format_exc()}")
+
     # ═══════════════════════════════════════════════════════════════════
     # АЛЕРТЫ
     # ═══════════════════════════════════════════════════════════════════
@@ -1152,7 +1184,7 @@ class MainWindow(QMainWindow):
             except Exception:
                 pass
 
-        alert_text = f"{cow_display}: {msg}{vet_info}"
+        alert_text = f"{cow_tag}: \n{msg}{vet_info}"
 
         if level == "CRITICAL":
             CriticalAlert(self, "УГРОЗА ЗДОРОВЬЮ", alert_text).exec()
@@ -1196,9 +1228,11 @@ class MainWindow(QMainWindow):
                 self.notif_table.setItem(row, col, item)
 
         self.alert_count += 1
-        lbl = self.card_alerts.findChild(QLabel, "ValLabelAlert")
-        if lbl:
-            lbl.setText(str(self.alert_count))
+        # Безопасно пытаемся обновить лейбл тревог
+        if hasattr(self, 'card_alerts'):
+            lbl = self.card_alerts.findChild(QLabel, "ValLabelAlert")
+            if lbl:
+                lbl.setText(str(self.alert_count))
 
     # ═══════════════════════════════════════════════════════════════════
     # ОТЧЁТЫ
@@ -1215,6 +1249,18 @@ class MainWindow(QMainWindow):
             return
         BaseReportDialog(
             parent=self, report_type="excel",
+            conn_params=self._get_conn_params(),
+            company_name="УМНАЯ ФЕРМА",
+        ).exec()
+
+    def _open_events_report_dialog(self):
+        try:
+            from ui.reports_dialog import BaseReportDialog
+        except ImportError:
+            QMessageBox.critical(self, "Ошибка", "Модуль ui/reports_dialog.py не найден.")
+            return
+        BaseReportDialog(
+            parent=self, report_type="events_excel",
             conn_params=self._get_conn_params(),
             company_name="УМНАЯ ФЕРМА",
         ).exec()

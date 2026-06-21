@@ -11,7 +11,7 @@ from PyQt6.QtCore import Qt
 
 def build(mw) -> QWidget:
     """
-    mw получает атрибуты: sql_input (если роль != vet), db_table
+    mw получает атрибуты: sql_input (если роль != vet), db_table, lbl_sql_status
     """
     page = QWidget()
     layout = QVBoxLayout(page)
@@ -40,6 +40,12 @@ def build(mw) -> QWidget:
         btn = QPushButton("ВЫПОЛНИТЬ ЗАПРОС")
         btn.clicked.connect(mw.execute_sql_query)
         layout.addWidget(btn)
+
+        # --- НОВЫЙ ЛЕЙБЛ ДЛЯ СТАТУСА ---
+        mw.lbl_sql_status = QLabel("")
+        mw.lbl_sql_status.setStyleSheet("font-size: 14px; font-weight: bold; border: none;")
+        mw.lbl_sql_status.setWordWrap(True)
+        layout.addWidget(mw.lbl_sql_status)
 
         mw.db_table = QTableWidget()
         mw.db_table.horizontalHeader().setSectionResizeMode(

@@ -39,7 +39,7 @@ from ui.notifications import LoginDialog
 
 def main():
     app = QApplication(sys.argv)
-    app.setApplicationName("Рога и копыта AI")
+    app.setApplicationName("УМНАЯ ФЕРМА")
 
     from database.db_startup import ensure_db_or_prompt
 

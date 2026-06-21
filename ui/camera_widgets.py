@@ -112,7 +112,8 @@ class CameraFeedWidget(QFrame):
         self.is_dark_theme = is_dark_theme
         self.setObjectName("CameraFeed")
         self.setMinimumSize(320, 240)
-        self.setMaximumSize(900, 700)
+        # Ограничение по максимальному размеру убрано — позволяет виджету
+        # занимать весь доступный мультивью, когда камера одна.
         self.setSizePolicy(
             QSizePolicy.Policy.Expanding,
             QSizePolicy.Policy.Expanding,
@@ -148,9 +149,14 @@ class CameraFeedWidget(QFrame):
         if w > 0 and h > 0:
             pixmap = QPixmap.fromImage(qt_img).scaled(
                 w, h,
-                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
                 Qt.TransformationMode.SmoothTransformation,
             )
+            # Обрезаем по центру, чтобы избежать выхода за границы виджета
+            if pixmap.width() > w or pixmap.height() > h:
+                x = max(0, (pixmap.width() - w) // 2)
+                y = max(0, (pixmap.height() - h) // 2)
+                pixmap = pixmap.copy(x, y, w, h)
             self.video_label.setPixmap(pixmap)
 
     def apply_theme(self):

@@ -905,9 +905,21 @@ class MainWindow(QMainWindow):
         if count == 0:
             return
         cols = max(1, math.ceil(math.sqrt(count)))
-        for i, w in enumerate(self.active_camera_widgets):
-            self.camera_layout.addWidget(w, i // cols, i % cols)
+        rows = math.ceil(count / cols)
 
+        for c in range(self.camera_layout.columnCount()):
+            self.camera_layout.setColumnStretch(c, 0)
+        for r in range(self.camera_layout.rowCount()):
+            self.camera_layout.setRowStretch(r, 0)
+
+        for i, w in enumerate(self.active_camera_widgets):
+            row, col = i // cols, i % cols
+            self.camera_layout.addWidget(w, row, col)
+
+        for c in range(cols):
+            self.camera_layout.setColumnStretch(c, 1)
+        for r in range(rows):
+            self.camera_layout.setRowStretch(r, 1)
     # ═══════════════════════════════════════════════════════════════════
     # БАЗА ДАННЫХ
     # ═══════════════════════════════════════════════════════════════════

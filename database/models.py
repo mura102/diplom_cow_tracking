@@ -233,16 +233,6 @@ class BCSMeasurement(Base):
 
     session = relationship("BCSSession", back_populates="measurements")
     cow     = relationship("Cow", back_populates="bcs_measurements")
-# ---------- Системные события (лог алертов из интерфейса) ----------
-
-class Event(Base):
-    __tablename__ = "events"
-
-    id_event  = Column(BigInteger, primary_key=True, autoincrement=True)
-    timestamp = Column(DateTime, nullable=False, default=datetime.utcnow)
-    level     = Column(String(20), nullable=False)   # "WARNING" | "CRITICAL" | "INFO"
-    cow_tag   = Column(String(20))                   # e.g. "A-01"
-    message   = Column(String, nullable=False)
 
 # ---------- Активность: кормление / питьё ----------
 
